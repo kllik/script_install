@@ -49,7 +49,7 @@ print_warning "Este script asume que ya creaste las particiones con cfdisk"
 print_warning "Asegúrate de que las particiones existan y sean correctas"
 echo
 read -p "¿Continuar con la instalación? [s/N]: " response
-if [! "$response" =~ ^([sS][iI]|[sS])$ ]; then
+if [[ ! "$response" =~ ^([sS][iI]|[sS])$ ]]; then
     print_message "Instalación cancelada"
     exit 0
 fi
@@ -182,7 +182,7 @@ print_success "Paquetes clave instalados"
 
 # --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
 print_message "Configurando NVIDIA para Wayland..."
-echo "options nvidia_drm modeset=1" | tee /etc/modprobe.d/nvidia.conf
+echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
 mkinitcpio -P
 print_success "NVIDIA configurado para Wayland"
@@ -201,7 +201,7 @@ print_message "Creando usuario 'antonio'..."
 useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
 print_message "Configura la contraseña para el usuario 'antonio':"
 passwd antonio
-echo '%wheel ALL=(ALL) ALL' | EDITOR='tee -a' visudo
+sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
 print_success "Usuario creado"
 
 # --- 17) HABILITAR SERVICIOS ---
