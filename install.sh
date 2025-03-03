@@ -192,18 +192,18 @@ print_success "NVIDIA configurado para Wayland y Hyprland"
 print_message "Instalando paquetes clave (esto tomará tiempo)..."
 pacman -S --noconfirm \
     hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    kitty fuzzel networkmanager sudo grub efibootmgr os-prober \
+    kitty fuzzel rofi networkmanager sudo grub efibootmgr os-prober \
     pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
     firefox bash egl-wayland qt5-wayland qt6-wayland \
     python python-pip lua go nodejs npm typescript sqlite \
     clang cmake ninja meson gdb lldb git tmux \
     sdl2 \
-    hyprpaper fastfetch pavucontrol ddcutil btop \
-    ttf-jetbrains-mono-nerd ttf-rubik ttf-firacode-nerd \
+    hyprpicker hyprpaper fastfetch pavucontrol ddcutil btop \
+    ttf-jetbrains-mono-nerd ttf-rubik ttf-firacode-nerd ttf-font-awesome ttf-nerd-fonts-symbols \
     zathura zathura-pdf-mupdf \
     noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
     xdg-utils xorg-xrandr \
-    gtk4 libadwaita gobject-introspection gjs webkit2gtk-4.1 gtksourceview5 \
+    gtk3 gtk4 libadwaita gobject-introspection gjs webkit2gtk-4.1 gtksourceview5 \
     sassc adwaita-icon-theme gnome-themes-extra blueman \
     polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
     mesa ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly \
@@ -211,10 +211,10 @@ pacman -S --noconfirm \
     gnome-bluetooth upower starship papirus-icon-theme
 print_success "Paquetes clave instalados"
 
-# --- 16) INSTALAR WAYBAR ---
-print_message "Instalando Waybar específica para Hyprland..."
-pacman -S --noconfirm waybar
-print_success "Waybar instalada"
+# --- 16) INSTALAR DEPENDENCIAS PARA AGS ---
+print_message "Instalando dependencias para Aylur's GTK Shell..."
+pacman -S --noconfirm gtk3 gtk-layer-shell colord-gtk4 gvfs 
+print_success "Dependencias para AGS instaladas"
 
 # --- 17) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
