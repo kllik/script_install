@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# === SCRIPT DE INSTALACIÓN DE ARCH LINUX CON BTRFS, HYPRLAND Y AYLUR'S GTK SHELL ===
+# === SCRIPT DE INSTALACIÓN DE ARCH LINUX CON BTRFS, HYPRLAND Y WAYBAR ===
 # Configuración para: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
 # Autor: Antonio
 # Uso: Este script continúa la instalación DESPUÉS de usar cfdisk para crear las particiones
@@ -37,14 +37,14 @@ fi
 
 # Definir dispositivos (asumiendo que ya se han creado las particiones)
 DISK="/dev/nvme0n1"
-EFI_DEV="${DISK}p5"
-SWAP_DEV="${DISK}p6"
-SYSTEM_DEV="${DISK}p7"
+EFI_DEV="${DISK}p1"  # Partición 1: EFI System (1GB)
+SWAP_DEV="${DISK}p2"  # Partición 2: Linux swap (8GB)
+SYSTEM_DEV="${DISK}p3"  # Partición 3: Linux filesystem (resto)
 
 print_message "Dispositivos a utilizar:"
-print_message "Partición EFI: $EFI_DEV"
-print_message "Partición SWAP: $SWAP_DEV"
-print_message "Partición Sistema (BTRFS): $SYSTEM_DEV"
+print_message "Partición EFI: $EFI_DEV (1GB)"
+print_message "Partición SWAP: $SWAP_DEV (8GB)"
+print_message "Partición Sistema (BTRFS): $SYSTEM_DEV (resto del disco)"
 print_warning "Este script asume que ya creaste las particiones con cfdisk"
 print_warning "Asegúrate de que las particiones existan y sean correctas"
 echo
@@ -162,7 +162,7 @@ print_success "Repositorio multilib habilitado"
 print_message "Instalando paquetes clave (esto tomará tiempo)..."
 pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
     hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    rofi kitty networkmanager sudo grub efibootmgr os-prober \
+    waybar rofi kitty networkmanager sudo grub efibootmgr \
     pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
     firefox discord steam obs-studio neovim bash egl-wayland thunar \
     python python-pip lua go nodejs npm typescript sqlite \
@@ -173,8 +173,7 @@ pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
     yazi zathura zathura-pdf-mupdf bluetui swaync \
     noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
     xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
-    gtk4 libadwaita gobject-introspection gjs webkit2gtk-4.1 gtksourceview5 \
-    sassc adwaita-icon-theme gnome-themes-extra blueman \
+    adwaita-icon-theme gnome-themes-extra blueman \
     polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
     mesa vulkan-radeon ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly \
     libreoffice-fresh imv glow wget
@@ -190,9 +189,7 @@ print_success "NVIDIA configurado para Wayland"
 # --- 15) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
 sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1"/' /etc/default/grub
-sed -i 's/^#GRUB_DISABLE_OS_PROBER=false/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
-os-prober
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado"
 
