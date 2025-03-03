@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # === SCRIPT DE INSTALACIÓN DE ARCH LINUX CON BTRFS, HYPRLAND Y AYLUR'S GTK SHELL ===
-# Configuración para: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
+# Configuración optimizada para: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
 # Autor: Antonio
+# Última actualización: Marzo 2025
 # Uso: Este script continúa la instalación DESPUÉS de usar cfdisk para crear las particiones
 
 # Colores para mensajes
@@ -35,17 +36,20 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Definir dispositivos (asumiendo que ya se han creado las particiones)
+# Definir dispositivos (actualizados para el nuevo esquema de particionado)
 DISK="/dev/nvme0n1"
-EFI_DEV="${DISK}p5"
-SWAP_DEV="${DISK}p6"
-SYSTEM_DEV="${DISK}p7"
+EFI_DEV="${DISK}p1"
+SWAP_DEV="${DISK}p2"
+SYSTEM_DEV="${DISK}p3"
 
 print_message "Dispositivos a utilizar:"
 print_message "Partición EFI: $EFI_DEV"
 print_message "Partición SWAP: $SWAP_DEV"
 print_message "Partición Sistema (BTRFS): $SYSTEM_DEV"
-print_warning "Este script asume que ya creaste las particiones con cfdisk"
+print_warning "Este script asume que ya creaste las particiones con cfdisk:"
+print_warning "  - ${EFI_DEV}: 1GB EFI System"
+print_warning "  - ${SWAP_DEV}: 8GB Linux swap"
+print_warning "  - ${SYSTEM_DEV}: Resto del espacio como Linux filesystem"
 print_warning "Asegúrate de que las particiones existan y sean correctas"
 echo
 read -p "¿Continuar con la instalación? [s/N]: " response
@@ -123,10 +127,10 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# --- 8) INSTALAR NANO ---
-print_message "Instalando nano..."
-pacman -Sy nano --noconfirm
-print_success "Nano instalado"
+# --- 8) INSTALAR EDITORES ---
+print_message "Instalando editores de texto..."
+pacman -Sy nano neovim --noconfirm
+print_success "Editores instalados"
 
 # --- 9) CONFIGURAR LOCALE Y ZONA HORARIA ---
 print_message "Configurando locale y zona horaria..."
@@ -140,11 +144,11 @@ print_success "Locale y zona horaria configurados"
 
 # --- 10) HOSTNAME Y HOSTS ---
 print_message "Configurando hostname..."
-echo "host" > /etc/hostname
+echo "archlinux" > /etc/hostname
 cat > /etc/hosts << EOF
 127.0.0.1   localhost
 ::1         localhost
-127.0.1.1   host.localdomain host
+127.0.1.1   archlinux.localdomain archlinux
 EOF
 print_success "Hostname configurado"
 
@@ -158,45 +162,70 @@ sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Repositorio multilib habilitado"
 
-# --- 13) INSTALAR PAQUETES CLAVE ---
-print_message "Instalando paquetes clave (esto tomará tiempo)..."
+# --- 13) INSTALAR CONTROLADORES NVIDIA Y SOPORTE GRÁFICO ---
+print_message "Instalando controladores NVIDIA optimizados para RTX 3080..."
 pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
+    vulkan-icd-loader lib32-vulkan-icd-loader vulkan-validation-layers lib32-vulkan-validation-layers \
+    vulkan-tools spirv-tools vulkan-headers
+print_success "Controladores NVIDIA instalados"
+
+# --- 14) CONFIGURAR NVIDIA PARA WAYLAND Y HYPRLAND ---
+print_message "Configurando NVIDIA para Wayland..."
+cat > /etc/modprobe.d/nvidia.conf << EOF
+options nvidia-drm modeset=1
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+options nvidia NVreg_RegistryDwords="PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x3"
+EOF
+
+# Configuración avanzada para Hyprland + NVIDIA
+cat > /etc/udev/rules.d/70-nvidia.rules << EOF
+# Create /nvidia device files on boot
+ACTION=="add", DEVPATH=="/bus/pci/drivers/nvidia", RUN+="/usr/bin/nvidia-modprobe -c0 -m"
+EOF
+
+# Módulos del kernel para soporte de NVIDIA
+sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
+mkinitcpio -P
+print_success "NVIDIA configurado para Wayland y Hyprland"
+
+# --- 15) INSTALAR PAQUETES CLAVE ---
+print_message "Instalando paquetes clave (esto tomará tiempo)..."
+pacman -S --noconfirm \
     hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    rofi kitty networkmanager sudo grub efibootmgr os-prober \
+    kitty fuzzel networkmanager sudo grub efibootmgr os-prober \
     pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
-    firefox discord steam obs-studio neovim bash egl-wayland thunar \
+    firefox bash egl-wayland qt5-wayland qt6-wayland \
     python python-pip lua go nodejs npm typescript sqlite \
     clang cmake ninja meson gdb lldb git tmux \
-    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
-    hyprpaper hyprlock fastfetch pavucontrol ddcutil btop \
-    ttf-jetbrains-mono-nerd \
-    yazi zathura zathura-pdf-mupdf bluetui swaync \
+    sdl2 \
+    hyprpaper fastfetch pavucontrol ddcutil btop \
+    ttf-jetbrains-mono-nerd ttf-rubik ttf-firacode-nerd \
+    zathura zathura-pdf-mupdf \
     noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
-    xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
+    xdg-utils xorg-xrandr \
     gtk4 libadwaita gobject-introspection gjs webkit2gtk-4.1 gtksourceview5 \
     sassc adwaita-icon-theme gnome-themes-extra blueman \
     polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
-    mesa vulkan-radeon ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly \
-    libreoffice-fresh imv glow wget
+    mesa ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly \
+    libreoffice-fresh grim slurp wf-recorder swaylock-effects swww \
+    gnome-bluetooth upower starship papirus-icon-theme
 print_success "Paquetes clave instalados"
 
-# --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
-print_message "Configurando NVIDIA para Wayland..."
-echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
-sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
-mkinitcpio -P
-print_success "NVIDIA configurado para Wayland"
+# --- 16) INSTALAR WAYBAR ---
+print_message "Instalando Waybar específica para Hyprland..."
+pacman -S --noconfirm waybar
+print_success "Waybar instalada"
 
-# --- 15) CONFIGURAR GRUB ---
+# --- 17) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1"/' /etc/default/grub
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1 rd.driver.blacklist=nouveau modprobe.blacklist=nouveau"/' /etc/default/grub
 sed -i 's/^#GRUB_DISABLE_OS_PROBER=false/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 os-prober
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado"
 
-# --- 16) CREAR USUARIO ---
+# --- 18) CREAR USUARIO ---
 print_message "Creando usuario 'antonio'..."
 useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
 print_message "Configura la contraseña para el usuario 'antonio':"
@@ -204,7 +233,7 @@ passwd antonio
 sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
 print_success "Usuario creado"
 
-# --- 17) HABILITAR SERVICIOS ---
+# --- 19) HABILITAR SERVICIOS ---
 print_message "Habilitando servicios..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
@@ -218,7 +247,7 @@ print_message "1. Retira el medio de instalación"
 print_message "2. Selecciona Arch Linux en GRUB"
 print_message "3. Inicia sesión como 'antonio'"
 print_message "4. Conecta a Internet con 'nmtui'"
-print_message "5. Sigue con la post-instalación según el README"
+print_message "5. Ejecuta el script de post-instalación"
 EOL
 
 # Hacer ejecutable el script post-chroot
