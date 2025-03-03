@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # === SCRIPT DE POST-INSTALACIÓN PARA CONFIGURAR HYPRLAND CON AYLUR'S GTK SHELL ===
-# Configuración basada en: https://github.com/end-4/dots-hyprland
+# Entorno estilo moderno con temas Catppuccin
 # Optimizado para: NVIDIA RTX 3080 + AMD Ryzen 9 5900HX
 # Adaptado para: Kitty terminal y Bash shell
-# Versión: 2.1 (Marzo 2025)
+# Versión: 1.0 (Marzo 2025)
 
 # Colores para mensajes
 GREEN='\033[0;32m'
@@ -55,7 +55,7 @@ fi
 # --- 1) VERIFICAR PAQUETES CRÍTICOS ---
 print_message "Verificando paquetes críticos..."
 CRITICAL_PACKAGES=(
-    "hyprland" "kitty" "waybar" "grim" "slurp" 
+    "hyprland" "kitty" "grim" "slurp" 
     "fuzzel" "git" "python" "meson" "ninja" "gcc"
 )
 
@@ -98,62 +98,58 @@ yay -S --noconfirm --needed \
     bibata-cursor-theme catppuccin-cursors-mocha hyprpicker-git \
     gradience swaylock-effects-git wlogout mako-git
 
-# Verificar AGS
+# --- 4) INSTALAR AYLUR'S GTK SHELL (AGS) ---
+# Verificar si ags está instalado
 if ! command -v ags &>/dev/null; then
-    print_message "AGS no está instalado, instalando Aylur's GTK Shell..."
-    # Verificamos si existe el paquete AUR primero
-    if yay -Ss ^ags$ | grep -q "aur/ags"; then
+    print_message "Instalando Aylur's GTK Shell..."
+    # Método 1: Verificar AUR
+    if yay -Ss "^ags$" | grep -q "aur/ags"; then
         print_message "Instalando AGS desde AUR..."
         yay -S --noconfirm ags
     else
-        print_message "Compilando AGS desde la fuente..."
+        # Método 2: Compilar desde GitHub
+        print_message "Compilando AGS desde el repositorio oficial..."
         cd /tmp
         rm -rf ags
         git clone https://github.com/Aylur/ags.git
         cd ags
-        npm install
+        # Instalamos las dependencias
+        sudo pacman -S --noconfirm --needed gtk3 gtk-layer-shell gjs
+        # Instalamos AGS
         meson setup build
         meson configure -Dbuildtype=release build
         ninja -C build
         sudo ninja -C build install
     fi
-else
-    print_success "AGS ya está instalado"
-fi
-
-print_success "Paquetes adicionales instalados"
-
-# --- 4) CREAR DIRECTORIO CONFIG Y CLONAR TEMPORALMENTE PARA REFERENCIAS ---
-print_message "Clonando repositorio de referencia temporalmente..."
-cd /tmp
-if [ -d "end4-dots" ]; then
-    rm -rf end4-dots
-fi
-git clone https://github.com/end-4/dots-hyprland.git end4-dots
-if [ $? -ne 0 ]; then
-    print_error "Error al clonar el repositorio de referencia. Verificando conectividad a internet..."
-    if ping -c 1 github.com &>/dev/null; then
-        print_error "La conexión a internet funciona, pero no se pudo clonar el repositorio."
-        print_error "Esto puede deberse a un cambio en la URL o a que el repositorio ya no existe."
-        read -p "¿Deseas continuar con la configuración manual? [s/N]: " continue_manual
-        if [[ ! "$continue_manual" =~ ^([sS][iI]|[sS])$ ]]; then
-            print_message "Instalación cancelada"
-            exit 1
-        fi
-    else
-        print_error "No hay conexión a internet. Por favor, verifica tu conexión y vuelve a intentarlo."
-        exit 1
+    
+    if ! command -v ags &>/dev/null; then
+        print_error "No se pudo instalar AGS. Intento final usando npm..."
+        cd /tmp
+        rm -rf ags
+        git clone https://github.com/Aylur/ags.git
+        cd ags
+        npm install
+        sudo npm install -g
     fi
 else
-    print_success "Repositorio clonado para referencia"
+    print_success "AGS ya está instalado en el sistema"
 fi
 
 # --- 5) CREAR DIRECTORIOS DE CONFIGURACIÓN ---
 print_message "Creando directorios de configuración..."
-mkdir -p ~/.config/{hypr,ags,kitty,fuzzel,fastfetch,swaylock,wlogout,waybar,mako}
+mkdir -p ~/.config/{hypr,ags,kitty,fuzzel,fastfetch,swaylock,wlogout,mako}
+mkdir -p ~/.config/ags/{widgets,services,modules}
+mkdir -p ~/.config/hypr/wallpapers
+mkdir -p ~/Pictures/Screenshots
 print_success "Directorios creados"
 
-# --- 6) CONFIGURAR KITTY TERMINAL ---
+# --- 6) DESCARGAR WALLPAPER NO ANIME ---
+print_message "Descargando wallpaper minimalista..."
+# Wallpaper estilo abstracto/minimalista
+curl -s -o ~/.config/hypr/wallpapers/wallpaper.jpg "https://w.wallhaven.cc/full/85/wallhaven-85oj9o.jpg"
+print_success "Wallpaper descargado"
+
+# --- 7) CONFIGURAR KITTY TERMINAL ---
 print_message "Configurando Kitty Terminal..."
 cat > ~/.config/kitty/kitty.conf << 'EOF'
 # Kitty Configuration - Optimizada para RTX 3080
@@ -264,209 +260,24 @@ tab_bar_background      #1E1E2E
 EOF
 print_success "Kitty configurada"
 
-# --- 7) CONFIGURAR HYPRLAND ---
-print_message "Configurando Hyprland..."
+# --- 8) CONFIGURAR HYPRLAND ---
+print_message "Configurando Hyprland con keybindings modernos..."
 
-if [ -d "/tmp/end4-dots/.config/hypr" ]; then
-    # Copiar archivo principal de Hyprland
-    cp -r /tmp/end4-dots/.config/hypr/* ~/.config/hypr/
-    
-    # Modificar configuración de Hyprland para usar Kitty en vez de Foot
-    if [ -f ~/.config/hypr/hyprland.conf ]; then
-        sed -i 's/foot/kitty/g' ~/.config/hypr/hyprland.conf
-        sed -i 's/fish/bash/g' ~/.config/hypr/hyprland.conf
-    else
-        print_error "No se encontró el archivo hyprland.conf. Creando uno básico..."
-        # Si no existe, crear una configuración básica
-        cat > ~/.config/hypr/hyprland.conf << 'EOF'
-# Configuración Hyprland - Optimizada para NVIDIA RTX 3080
+# Crear archivo principal de configuración Hyprland
+cat > ~/.config/hypr/hyprland.conf << 'EOF'
+# Configuración personalizada de Hyprland
+# Optimizada para NVIDIA RTX 3080 + AMD Ryzen 9 5900HX
+
+# Monitor
 monitor=,preferred,auto,1
 
 # Autostart
-exec-once = waybar
-exec-once = mako
-exec-once = ags
-
-# Variables de entorno para NVIDIA
-env = LIBVA_DRIVER_NAME,nvidia
-env = XDG_SESSION_TYPE,wayland
-env = GBM_BACKEND,nvidia-drm
-env = __GLX_VENDOR_LIBRARY_NAME,nvidia
-env = WLR_NO_HARDWARE_CURSORS,1
-env = __GL_GSYNC_ALLOWED,0
-env = __GL_VRR_ALLOWED,0
-env = WLR_DRM_NO_ATOMIC,1
-env = MOZ_ENABLE_WAYLAND,1
-env = QT_QPA_PLATFORM,wayland
-env = QT_WAYLAND_DISABLE_WINDOWDECORATION,1
-env = XCURSOR_SIZE,24
-env = HYPRCURSOR_SIZE,24
-
-# Variables de tema
-env = GTK_THEME,Catppuccin-Mocha-Standard-Blue-Dark
-env = XCURSOR_THEME,Catppuccin-Mocha-Dark-Cursors
-
-# Configuración General
-general {
-    gaps_in = 5
-    gaps_out = 10
-    border_size = 2
-    col.active_border = rgba(cba6f7ff) rgba(89b4faff) 45deg
-    col.inactive_border = rgba(6c7086aa)
-    layout = dwindle
-    allow_tearing = false
-}
-
-# Decoración
-decoration {
-    rounding = 10
-    blur {
-        enabled = true
-        size = 8
-        passes = 3
-        new_optimizations = on
-        xray = false
-    }
-    drop_shadow = true
-    shadow_range = 15
-    shadow_render_power = 3
-    col.shadow = rgba(1a1a1aee)
-}
-
-# Animaciones
-animations {
-    enabled = true
-    bezier = myBezier, 0.05, 0.9, 0.1, 1.05
-    animation = windows, 1, 7, myBezier
-    animation = windowsOut, 1, 7, default, popin 80%
-    animation = border, 1, 10, default
-    animation = borderangle, 1, 8, default
-    animation = fade, 1, 7, default
-    animation = workspaces, 1, 6, default
-}
-
-# Disposición
-dwindle {
-    pseudotile = true
-    preserve_split = true
-}
-
-master {
-    new_is_master = true
-}
-
-# Gestos
-gestures {
-    workspace_swipe = true
-}
-
-# Rendimiento
-misc {
-    force_default_wallpaper = 0
-    vfr = true
-    vrr = 1
-    mouse_move_enables_dpms = true
-    key_press_enables_dpms = true
-}
-
-# Reglas de ventana
-windowrulev2 = nomaximizerequest, class:.*
-windowrulev2 = float, class:^(pavucontrol)$
-windowrulev2 = float, class:^(org.kde.polkit-kde-authentication-agent-1)$
-windowrulev2 = float, class:^(org.gnome.Calculator)$
-windowrulev2 = float, class:^(org.gnome.Calendar)$
-windowrulev2 = float, class:^(thunar)$,title:^(File Operation)$
-windowrulev2 = float, class:^(firefox)$,title:^(Library)$
-windowrulev2 = float, class:^(nwg-look)$
-windowrulev2 = float, class:^(com.github.Aylur.ags)$
-
-# Atajos de teclado
-$mainMod = SUPER
-
-# Aplicaciones
-bind = $mainMod, return, exec, kitty
-bind = $mainMod, E, exec, thunar
-bind = $mainMod, B, exec, firefox
-bind = $mainMod, R, exec, fuzzel
-bind = $mainMod, S, exec, rofi -show window
-bind = $mainMod, X, exec, wlogout
-
-# Control de ventanas
-bind = $mainMod, Q, killactive
-bind = $mainMod SHIFT, Q, exit
-bind = $mainMod, V, togglefloating
-bind = $mainMod, P, pseudo
-bind = $mainMod, J, togglesplit
-bind = $mainMod, F, fullscreen
-
-# Movimiento de enfoque
-bind = $mainMod, left, movefocus, l
-bind = $mainMod, right, movefocus, r
-bind = $mainMod, up, movefocus, u
-bind = $mainMod, down, movefocus, d
-
-# Cambio de espacio de trabajo
-bind = $mainMod, 1, workspace, 1
-bind = $mainMod, 2, workspace, 2
-bind = $mainMod, 3, workspace, 3
-bind = $mainMod, 4, workspace, 4
-bind = $mainMod, 5, workspace, 5
-bind = $mainMod, 6, workspace, 6
-bind = $mainMod, 7, workspace, 7
-bind = $mainMod, 8, workspace, 8
-bind = $mainMod, 9, workspace, 9
-bind = $mainMod, 0, workspace, 10
-
-# Mover ventanas a espacios de trabajo
-bind = $mainMod SHIFT, 1, movetoworkspace, 1
-bind = $mainMod SHIFT, 2, movetoworkspace, 2
-bind = $mainMod SHIFT, 3, movetoworkspace, 3
-bind = $mainMod SHIFT, 4, movetoworkspace, 4
-bind = $mainMod SHIFT, 5, movetoworkspace, 5
-bind = $mainMod SHIFT, 6, movetoworkspace, 6
-bind = $mainMod SHIFT, 7, movetoworkspace, 7
-bind = $mainMod SHIFT, 8, movetoworkspace, 8
-bind = $mainMod SHIFT, 9, movetoworkspace, 9
-bind = $mainMod SHIFT, 0, movetoworkspace, 10
-
-# Navegación de espacios de trabajo
-bind = $mainMod, mouse_down, workspace, e+1
-bind = $mainMod, mouse_up, workspace, e-1
-
-# Mover/redimensionar ventanas con ratón
-bindm = $mainMod, mouse:272, movewindow
-bindm = $mainMod, mouse:273, resizewindow
-
-# Control de medios
-bind = , XF86AudioRaiseVolume, exec, pactl set-sink-volume @DEFAULT_SINK@ +5%
-bind = , XF86AudioLowerVolume, exec, pactl set-sink-volume @DEFAULT_SINK@ -5%
-bind = , XF86AudioMute, exec, pactl set-sink-mute @DEFAULT_SINK@ toggle
-bind = , XF86AudioPlay, exec, playerctl play-pause
-bind = , XF86AudioNext, exec, playerctl next
-bind = , XF86AudioPrev, exec, playerctl previous
-
-# Brillo
-bind = , XF86MonBrightnessUp, exec, brightnessctl set +5%
-bind = , XF86MonBrightnessDown, exec, brightnessctl set 5%-
-
-# Capturas de pantalla
-bind = $mainMod, PRINT, exec, grim -g "$(slurp)" - | wl-copy
-bind = , PRINT, exec, grim ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png
-bind = SHIFT, PRINT, exec, grim -g "$(slurp)" ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png
-EOF
-    fi
-else
-    print_warning "No se encontró la configuración de Hyprland en el repositorio de referencia. Creando configuración básica..."
-    # Crear configuración básica de Hyprland
-    cat > ~/.config/hypr/hyprland.conf << 'EOF'
-# Configuración Hyprland - Optimizada para NVIDIA RTX 3080
-monitor=,preferred,auto,1
-
-# Autostart
-exec-once = waybar
-exec-once = mako
 exec-once = ags
 exec-once = swww init && swww img ~/.config/hypr/wallpapers/wallpaper.jpg --transition-fps 60
+exec-once = mako
+exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+exec-once = wl-paste --type text --watch cliphist store
+exec-once = wl-paste --type image --watch cliphist store
 
 # Variables de entorno para NVIDIA
 env = LIBVA_DRIVER_NAME,nvidia
@@ -550,35 +361,25 @@ misc {
     key_press_enables_dpms = true
 }
 
-# Reglas de ventana
-windowrulev2 = nomaximizerequest, class:.*
-windowrulev2 = float, class:^(pavucontrol)$
-windowrulev2 = float, class:^(org.kde.polkit-kde-authentication-agent-1)$
-windowrulev2 = float, class:^(org.gnome.Calculator)$
-windowrulev2 = float, class:^(org.gnome.Calendar)$
-windowrulev2 = float, class:^(thunar)$,title:^(File Operation)$
-windowrulev2 = float, class:^(firefox)$,title:^(Library)$
-windowrulev2 = float, class:^(nwg-look)$
-windowrulev2 = float, class:^(com.github.Aylur.ags)$
-
-# Atajos de teclado
+# Keybindings modernos similares a los populares
 $mainMod = SUPER
 
 # Aplicaciones
-bind = $mainMod, return, exec, kitty
+bind = $mainMod, Return, exec, kitty
 bind = $mainMod, E, exec, thunar
 bind = $mainMod, B, exec, firefox
-bind = $mainMod, R, exec, fuzzel
-bind = $mainMod, S, exec, rofi -show window
-bind = $mainMod, X, exec, wlogout
+
+# Lanzadores
+bind = $mainMod, space, exec, fuzzel
+bind = SUPER_SHIFT, V, exec, cliphist list | fuzzel -d | cliphist decode | wl-copy
 
 # Control de ventanas
 bind = $mainMod, Q, killactive
-bind = $mainMod SHIFT, Q, exit
-bind = $mainMod, V, togglefloating
+bind = $mainMod SHIFT, E, exit
+bind = $mainMod, F, fullscreen
+bind = $mainMod SHIFT, Space, togglefloating
 bind = $mainMod, P, pseudo
 bind = $mainMod, J, togglesplit
-bind = $mainMod, F, fullscreen
 
 # Movimiento de enfoque
 bind = $mainMod, left, movefocus, l
@@ -610,7 +411,7 @@ bind = $mainMod SHIFT, 8, movetoworkspace, 8
 bind = $mainMod SHIFT, 9, movetoworkspace, 9
 bind = $mainMod SHIFT, 0, movetoworkspace, 10
 
-# Navegación de espacios de trabajo
+# Cambiar espacios de trabajo con rueda del ratón
 bind = $mainMod, mouse_down, workspace, e+1
 bind = $mainMod, mouse_up, workspace, e-1
 
@@ -618,38 +419,30 @@ bind = $mainMod, mouse_up, workspace, e-1
 bindm = $mainMod, mouse:272, movewindow
 bindm = $mainMod, mouse:273, resizewindow
 
-# Control de medios
+# Multimedia y brillo
 bind = , XF86AudioRaiseVolume, exec, pactl set-sink-volume @DEFAULT_SINK@ +5%
 bind = , XF86AudioLowerVolume, exec, pactl set-sink-volume @DEFAULT_SINK@ -5%
 bind = , XF86AudioMute, exec, pactl set-sink-mute @DEFAULT_SINK@ toggle
 bind = , XF86AudioPlay, exec, playerctl play-pause
 bind = , XF86AudioNext, exec, playerctl next
 bind = , XF86AudioPrev, exec, playerctl previous
-
-# Brillo
 bind = , XF86MonBrightnessUp, exec, brightnessctl set +5%
 bind = , XF86MonBrightnessDown, exec, brightnessctl set 5%-
 
-# Capturas de pantalla
-bind = $mainMod, PRINT, exec, grim -g "$(slurp)" - | wl-copy
-bind = , PRINT, exec, grim ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png
-bind = SHIFT, PRINT, exec, grim -g "$(slurp)" ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png
+# Screenshots
+bind = , Print, exec, grim - | wl-copy
+bind = SHIFT, Print, exec, grim -g "$(slurp)" - | wl-copy
+bind = CTRL, Print, exec, grim ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png
+bind = CTRL SHIFT, Print, exec, grim -g "$(slurp)" ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png
+
+# AGS - teclas específicas para AGS
+bind = $mainMod, Tab, exec, ags -t overview
+bind = $mainMod, slash, exec, ags -t cheatsheet 
+bind = $mainMod, D, exec, ags -t applauncher
+bind = $mainMod, X, exec, wlogout
 EOF
-fi
 
-# Añadir lanzamiento de Waybar y AGS si no existe
-if ! grep -q "exec-once = waybar" ~/.config/hypr/hyprland.conf; then
-    print_message "Añadiendo inicio automático de Waybar..."
-    sed -i '/^exec-once = /a exec-once = waybar' ~/.config/hypr/hyprland.conf
-fi
-
-if ! grep -q "exec-once = ags" ~/.config/hypr/hyprland.conf; then
-    print_message "Añadiendo inicio automático de AGS..."
-    sed -i '/^exec-once = /a exec-once = ags' ~/.config/hypr/hyprland.conf
-fi
-
-# Asegurar configuración NVIDIA en el archivo hyprland.conf
-print_message "Configurando Hyprland específicamente para NVIDIA RTX 3080..."
+# Crear configuración específica para NVIDIA
 cat > ~/.config/hypr/nvidia.conf << 'EOF'
 # NVIDIA RTX 3080 specific settings
 env = LIBVA_DRIVER_NAME,nvidia
@@ -692,413 +485,1503 @@ misc {
 }
 EOF
 
-# Asegurarse de que el archivo nvidia.conf se incluya en hyprland.conf
-if ! grep -q "source = ./nvidia.conf" ~/.config/hypr/hyprland.conf; then
-    echo "source = ./nvidia.conf" >> ~/.config/hypr/hyprland.conf
-fi
-
-# Descargar o copiar un wallpaper no anime
-print_message "Configurando wallpaper..."
-mkdir -p ~/.config/hypr/wallpapers
-curl -s -o ~/.config/hypr/wallpapers/wallpaper.jpg "https://w.wallhaven.cc/full/85/wallhaven-85oj9o.jpg"
-
-# Configurar swww para iniciar con el wallpaper
-if ! grep -q "swww init" ~/.config/hypr/hyprland.conf; then
-    print_message "Añadiendo configuración de wallpaper con swww..."
-    sed -i '/^exec-once = /a exec-once = swww init && swww img ~/.config/hypr/wallpapers/wallpaper.jpg --transition-fps 60' ~/.config/hypr/hyprland.conf
-fi
+# Incluir archivo de configuración de NVIDIA
+echo "source = ./nvidia.conf" >> ~/.config/hypr/hyprland.conf
 
 print_success "Hyprland configurado"
 
-# --- 8) CONFIGURAR AYLUR'S GTK SHELL (AGS) ---
-print_message "Configurando Aylur's GTK Shell (AGS)..."
+# --- 9) CONFIGURAR AYLUR'S GTK SHELL (AGS) ---
+print_message "Creando configuración AGS desde cero..."
 
-# Verificar si ags está instalado
-if ! command -v ags &>/dev/null; then
-    print_error "AGS no está instalado. Instalándolo..."
-    cd /tmp
-    git clone https://github.com/Aylur/ags.git
-    cd ags
-    meson setup build
-    meson configure -Dbuildtype=release build
-    ninja -C build
-    sudo ninja -C build install
-    cd ~
-fi
+# Crear archivo principal de configuración para AGS
+cat > ~/.config/ags/config.js << 'EOF'
+import App from "resource:///com/github/Aylur/ags/app.js";
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import * as Utils from "resource:///com/github/Aylur/ags/utils.js";
 
-# Crear estructura de directorios para AGS
-mkdir -p ~/.config/ags/{widgets,styles,services,modules}
+// Importaciones de servicios
+import Hyprland from "resource:///com/github/Aylur/ags/service/hyprland.js";
+import Audio from "resource:///com/github/Aylur/ags/service/audio.js";
+import Battery from "resource:///com/github/Aylur/ags/service/battery.js";
+import Network from "resource:///com/github/Aylur/ags/service/network.js";
+import SystemTray from "resource:///com/github/Aylur/ags/service/systemtray.js";
+import Mpris from "resource:///com/github/Aylur/ags/service/mpris.js";
 
-# Verificar si podemos copiar de los dots originales
-if [ -d "/tmp/end4-dots/.config/ags" ]; then
-    # Copiar la configuración de AGS
-    cp -r /tmp/end4-dots/.config/ags/* ~/.config/ags/
-    
-    # Modificar user_options.js para quitar anime y ajustar terminal
-    if [ -f ~/.config/ags/modules/.configuration/user_options.js ]; then
-        print_message "Modificando opciones de usuario de AGS para quitar contenido anime..."
-        # Quitar módulos de anime (waifu y booru)
-        sed -i 's/\(apis: { order: \[\)"gemini", "gpt", "waifu", "booru"/\1"gemini", "gpt"/g' ~/.config/ags/modules/.configuration/user_options.js
-        
-        # Cambiar terminal a kitty y shell a bash
-        sed -i 's/foot/kitty/g' ~/.config/ags/modules/.configuration/user_options.js
-        sed -i 's/fish/bash/g' ~/.config/ags/modules/.configuration/user_options.js
-    fi
-    
-    # Buscar y eliminar archivos o carpetas específicas relacionadas con anime
-    print_message "Eliminando cualquier contenido anime residual..."
-    find ~/.config/ags -name "*waifu*" -type d -exec rm -rf {} \; 2>/dev/null || true
-    find ~/.config/ags -name "*booru*" -type d -exec rm -rf {} \; 2>/dev/null || true
-    find ~/.config/ags -name "*anime*" -type d -exec rm -rf {} \; 2>/dev/null || true
-else
-    print_warning "No se encontró la configuración de AGS en el repositorio de referencia."
-    print_message "Creando configuración básica de AGS..."
-    
-    # Crear archivos básicos de AGS
-    cat > ~/.config/ags/config.js << 'EOF'
-import App from 'resource:///com/github/Aylur/ags/app.js';
-import Widget from 'resource:///com/github/Aylur/ags/widget.js';
-import { exec, execAsync } from 'resource:///com/github/Aylur/ags/utils.js';
+// Widgets principales
+import Bar from "./widgets/bar.js";
+import Overview from "./widgets/overview.js";
+import OSD from "./widgets/osd.js";
+import CheatSheet from "./widgets/cheatsheet.js";
+import AppLauncher from "./widgets/applauncher.js";
+import PowerMenu from "./widgets/powermenu.js";
+import QuickSettings from "./widgets/quicksettings.js";
+import Notifications from "./widgets/notifications.js";
 
-// Simple bar
-const SimpleBar = () => Widget.Window({
-    name: 'bar',
-    anchor: ['top', 'left', 'right'],
-    exclusivity: 'exclusive',
-    child: Widget.CenterBox({
-        start_widget: Widget.Box({
-            children: [
-                Widget.Button({
-                    child: Widget.Label('🚀'),
-                    on_clicked: () => execAsync('fuzzel'),
-                }),
-                Widget.Workspaces(),
-            ],
-        }),
-        center_widget: Widget.Box({
-            children: [
-                Widget.Clock({
-                    format: '%H:%M - %A %e %B %Y',
-                }),
-            ],
-        }),
-        end_widget: Widget.Box({
-            children: [
-                Widget.Network(),
-                Widget.Volume(),
-                Widget.Battery(),
-                Widget.SystemTray(),
-            ],
-        }),
-    }),
-});
-
-// Exporting the config
-export default {
-    windows: [
-        SimpleBar(),
-    ],
-};
-EOF
-    
-    print_message "Configuración básica de AGS creada. Para una configuración más completa, consulta la documentación oficial."
-fi
-
-print_success "Aylur's GTK Shell configurado"
-
-# --- 9) CONFIGURAR WAYBAR ---
-print_message "Configurando Waybar..."
-if ! command -v waybar &>/dev/null; then
-    print_error "Waybar no está instalada. Intentando instalarla..."
-    sudo pacman -S --noconfirm waybar
-    if [ $? -ne 0 ]; then
-        print_error "No se pudo instalar waybar. Intentando con waybar-hyprland desde AUR..."
-        yay -S --noconfirm waybar-hyprland
-    fi
-fi
-
-mkdir -p ~/.config/waybar
-cat > ~/.config/waybar/config << 'EOF'
-{
-    "layer": "top",
-    "position": "top",
-    "height": 30,
-    "spacing": 4,
-    "margin-top": 0,
-    "margin-bottom": 0,
-    "margin-left": 0,
-    "margin-right": 0,
-    "modules-left": ["custom/launcher", "hyprland/workspaces", "hyprland/window"],
-    "modules-center": ["mpris"],
-    "modules-right": ["network", "pulseaudio", "cpu", "memory", "temperature", "battery", "tray", "clock"],
-    
-    "custom/launcher": {
-        "format": "󰣇",
-        "on-click": "fuzzel",
-        "tooltip": false
-    },
-    
-    "hyprland/workspaces": {
-        "format": "{name}",
-        "format-active": "<span foreground='#cba6f7'>{name}</span>",
-        "on-click": "activate"
-    },
-    
-    "hyprland/window": {
-        "max-length": 50,
-        "separate-outputs": true
-    },
-    
-    "mpris": {
-        "format": "{player_icon} <i>{status}</i> {dynamic}",
-        "format-paused": "{player_icon} <i>{status}</i> {dynamic}",
-        "player-icons": {
-            "default": "▶",
-            "mpd": "🎵",
-            "firefox": "",
-            "chromium": "",
-            "brave": "",
-            "vlc": "󰕼"
-        },
-        "status-icons": {
-            "paused": "⏸",
-            "playing": "▶",
-            "stopped": "⏹"
-        },
-        "dynamic-order": ["artist", "album", "title"]
-    },
-    
-    "tray": {
-        "icon-size": 18,
-        "spacing": 8
-    },
-    
-    "clock": {
-        "format": "{:%H:%M}",
-        "format-alt": "{:%a, %b %d %Y}",
-        "tooltip-format": "<tt>{calendar}</tt>",
-        "calendar": {
-            "mode": "month",
-            "mode-mon-col": 3,
-            "weeks-pos": "right",
-            "on-scroll": 1,
-            "format": {
-                "months": "<span color='#cba6f7'><b>{}</b></span>",
-                "days": "<span color='#cdd6f4'>{}</span>",
-                "weeks": "<span color='#89b4fa'><b>W{}</b></span>",
-                "weekdays": "<span color='#f5c2e7'><b>{}</b></span>",
-                "today": "<span color='#f38ba8'><b>{}</b></span>"
-            }
-        },
-        "actions": {
-            "on-click": "mode",
-            "on-click-right": "mode"
-        }
-    },
-    
-    "cpu": {
-        "format": "{usage}% ",
-        "tooltip": true,
-        "interval": 2
-    },
-    
-    "memory": {
-        "format": "{}% ",
-        "interval": 2
-    },
-    
-    "temperature": {
-        "thermal-zone": 2,
-        "critical-threshold": 80,
-        "format-critical": "{temperatureC}°C ",
-        "format": "{temperatureC}°C "
-    },
-    
-    "battery": {
-        "states": {
-            "good": 95,
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "{capacity}% {icon}",
-        "format-charging": "{capacity}% ",
-        "format-plugged": "{capacity}% ",
-        "format-alt": "{time} {icon}",
-        "format-icons": ["", "", "", "", ""]
-    },
-    
-    "network": {
-        "format-wifi": "{essid} ({signalStrength}%) ",
-        "format-ethernet": "{ipaddr}/{cidr} ",
-        "tooltip-format": "{ifname} via {gwaddr} ",
-        "format-linked": "{ifname} (No IP) ",
-        "format-disconnected": "Disconnected ⚠",
-        "format-alt": "{ifname}: {ipaddr}/{cidr}"
-    },
-    
-    "pulseaudio": {
-        "format": "{volume}% {icon} {format_source}",
-        "format-bluetooth": "{volume}% {icon} {format_source}",
-        "format-bluetooth-muted": " {icon} {format_source}",
-        "format-muted": " {format_source}",
-        "format-source": "{volume}% ",
-        "format-source-muted": "",
-        "format-icons": {
-            "headphone": "",
-            "hands-free": "",
-            "headset": "",
-            "phone": "",
-            "portable": "",
-            "car": "",
-            "default": ["", "", ""]
-        },
-        "on-click": "pavucontrol"
-    }
-}
-EOF
-
-cat > ~/.config/waybar/style.css << 'EOF'
+// Estilos
+const css = `
 * {
-    /* `otf-font-awesome` is required to be installed for icons */
     font-family: "JetBrainsMono Nerd Font", "Rubik", sans-serif;
     font-size: 14px;
 }
 
-window#waybar {
-    background-color: rgba(30, 30, 46, 0.95);
+.bar {
+    background-color: rgba(30, 30, 46, 0.9);
     color: #cdd6f4;
-    transition-property: background-color;
-    transition-duration: .5s;
-    border-radius: 0px 0px 8px 8px;
+    padding: 8px;
+    border-radius: 0 0 12px 12px;
 }
 
-window#waybar.hidden {
-    opacity: 0.2;
-}
-
-#workspaces button {
-    padding: 0 6px;
-    background-color: transparent;
-    color: #cdd6f4;
-    box-shadow: inset 0 -3px transparent;
-    border: none;
-    border-radius: 0;
-}
-
-#workspaces button:hover {
-    background: rgba(180, 190, 254, 0.2);
-    box-shadow: inset 0 -3px #cba6f7;
-}
-
-#workspaces button.active {
-    box-shadow: inset 0 -3px #cba6f7;
-}
-
-#workspaces button.urgent {
-    background-color: #f38ba8;
-    color: #1e1e2e;
-}
-
-#mode {
-    background-color: #89b4fa;
-    color: #1e1e2e;
-    border-radius: 8px;
-    padding: 0 10px;
-    margin: 5px 5px;
-}
-
-#clock,
-#battery,
-#cpu,
-#memory,
-#disk,
-#temperature,
-#backlight,
-#network,
-#pulseaudio,
-#custom-media,
-#tray,
-#mode,
-#idle_inhibitor,
-#scratchpad,
-#mpris,
-#custom-launcher {
-    padding: 0 10px;
-    margin: 5px 0;
-    color: #cdd6f4;
-}
-
-#window {
+.bar-widget {
     margin: 0 5px;
 }
 
-.modules-left {
+.workspaces button {
+    padding: 0 5px;
+    background-color: transparent;
+    color: #cdd6f4;
+    font-size: 16px;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 99px;
+    margin: 0 2px;
+}
+
+.workspaces button.active {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+
+.widget-button {
+    border-radius: 99px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 10px;
+    background-color: transparent;
+}
+
+.widget-button:hover {
+    background-color: rgba(49, 50, 68, 0.7);
+}
+
+.menu-box {
+    background-color: rgba(30, 30, 46, 0.95);
+    padding: 12px;
+    border-radius: 12px;
+    border: 2px solid #89b4fa;
+}
+
+.menu-header {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: #cdd6f4;
+}
+
+.overview {
+    background-color: rgba(30, 30, 46, 0.8);
+    border-radius: 12px;
+    border: 2px solid #cba6f7;
+    padding: 20px;
+}
+
+.overview-workspace {
+    background-color: rgba(49, 50, 68, 0.7);
+    border-radius: 10px;
+    margin: 5px;
+    padding: 10px;
+}
+
+.overview-window {
+    background-color: #1e1e2e;
+    border-radius: 8px;
+    border: 1px solid #89b4fa;
+    color: #cdd6f4;
+    padding: 5px;
+    margin: 3px;
+}
+
+.cheatsheet {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 12px;
+    border: 2px solid #f9e2af;
+    padding: 20px;
+}
+
+.launcher {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 12px;
+    border: 2px solid #89b4fa;
+    padding: 15px;
+}
+
+.launcher-entry {
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.launcher-entry:hover {
+    background-color: rgba(49, 50, 68, 0.7);
+}
+
+.launcher-icon {
+    min-width: 48px;
+    min-height: 48px;
+    margin-right: 8px;
+}
+
+.notification {
+    background-color: rgba(30, 30, 46, 0.95);
+    border-radius: 10px;
+    border-left: 4px solid #89b4fa;
+    padding: 12px;
+    margin: 5px 0;
+}
+
+.notification.critical {
+    border-left: 4px solid #f38ba8;
+}
+
+.powermenu {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 20px;
+    border: 2px solid #f5c2e7;
+}
+
+.powermenu-button {
+    padding: 20px;
+    font-size: 32px;
+    border-radius: 15px;
+    margin: 10px;
+    min-width: 100px;
+    min-height: 100px;
+}
+
+.powermenu-button:hover {
+    background-color: rgba(49, 50, 68, 0.7);
+}
+
+.quicksettings {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 15px;
+    border: 2px solid #94e2d5;
+    padding: 15px;
+}
+
+.slider trough highlight {
+    background-color: #89b4fa;
+    border-radius: 10px;
+}
+
+.slider trough {
+    background-color: #313244;
+    border-radius: 10px;
+    min-height: 6px;
+    min-width: 150px;
+}
+
+.osd {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 10px;
+    padding: 15px;
+    border: 2px solid #cba6f7;
+    color: #cdd6f4;
+}
+`;
+
+// Exportar configuración
+export default {
+    css,
+    windows: [
+        Bar(),
+        Overview(),
+        OSD(),
+        CheatSheet(),
+        AppLauncher(),
+        PowerMenu(),
+        QuickSettings(),
+        Notifications(),
+    ]
+};
+EOF
+
+# Crear widgets principales
+mkdir -p ~/.config/ags/widgets
+
+# Barra principal
+cat > ~/.config/ags/widgets/bar.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import * as Utils from "resource:///com/github/Aylur/ags/utils.js";
+import Hyprland from "resource:///com/github/Aylur/ags/service/hyprland.js";
+import Audio from "resource:///com/github/Aylur/ags/service/audio.js";
+import Battery from "resource:///com/github/Aylur/ags/service/battery.js";
+import Network from "resource:///com/github/Aylur/ags/service/network.js";
+import SystemTray from "resource:///com/github/Aylur/ags/service/systemtray.js";
+import Mpris from "resource:///com/github/Aylur/ags/service/mpris.js";
+
+// Workspaces Widget
+const Workspaces = () => Widget.Box({
+    className: "workspaces",
+    children: Hyprland.bind("workspaces").transform(workspaces => {
+        return workspaces.map(ws => Widget.Button({
+            className: `workspace ${Hyprland.active.workspace.id === ws.id ? "active" : ""}`,
+            child: Widget.Label({
+                label: `${ws.id}`,
+            }),
+            onClicked: () => Utils.execAsync(`hyprctl dispatch workspace ${ws.id}`),
+        }));
+    }),
+});
+
+// Window title
+const WindowTitle = () => Widget.Label({
+    className: "window-title",
+    label: Hyprland.active.bind("client").transform(c => c?.title || "Desktop"),
+    truncate: "end",
+    maxWidthChars: 40,
+});
+
+// Clock Widget
+const Clock = () => Widget.Label({
+    className: "clock",
+    label: Utils.formatTime("%H:%M - %a %d %b"),
+    setup: self => self.poll(1000, self => {
+        self.label = Utils.formatTime("%H:%M - %a %d %b");
+    }),
+});
+
+// Battery Widget
+const BatteryWidget = () => Widget.Box({
+    className: "battery-widget",
+    visible: Battery.bind("available"),
+    children: [
+        Widget.Icon({
+            icon: Battery.bind("percent").transform(p => {
+                if (Battery.charging) return "battery-charging-symbolic";
+                if (p < 10) return "battery-empty-symbolic";
+                if (p < 30) return "battery-low-symbolic";
+                if (p < 60) return "battery-good-symbolic";
+                return "battery-full-symbolic";
+            }),
+        }),
+        Widget.Label({
+            label: Battery.bind("percent").transform(p => `${p}%`),
+        }),
+    ],
+});
+
+// Network Widget
+const NetworkWidget = () => Widget.Box({
+    className: "network-widget",
+    children: [
+        Widget.Icon({
+            icon: Network.bind("primary").transform(p => {
+                if (!p) return "network-offline-symbolic";
+                if (p.type === "wired") return "network-wired-symbolic";
+                if (!p.strength) return "network-wireless-disconnected-symbolic";
+                if (p.strength < 30) return "network-wireless-weak-symbolic";
+                if (p.strength < 60) return "network-wireless-ok-symbolic";
+                return "network-wireless-good-symbolic";
+            }),
+        }),
+        Widget.Label({
+            label: Network.bind("primary").transform(p => p?.name || "Not Connected"),
+        }),
+    ],
+});
+
+// Volume Widget
+const VolumeWidget = () => Widget.Box({
+    className: "volume-widget",
+    children: [
+        Widget.Icon({
+            icon: Audio.bind("speaker").transform(s => {
+                if (!s) return "audio-volume-muted-symbolic";
+                if (s.muted) return "audio-volume-muted-symbolic";
+                if (s.volume < 30) return "audio-volume-low-symbolic";
+                if (s.volume < 70) return "audio-volume-medium-symbolic";
+                return "audio-volume-high-symbolic";
+            }),
+        }),
+        Widget.Label({
+            label: Audio.bind("speaker").transform(s => s ? `${Math.round(s.volume)}%` : ""),
+        }),
+    ],
+});
+
+// System Tray
+const Tray = () => Widget.Box({
+    className: "system-tray",
+    children: [
+        SystemTray.bind().transform(items => {
+            return items.map(item => Widget.Button({
+                className: "tray-item",
+                child: Widget.Icon({
+                    icon: item.bind("icon"),
+                }),
+                onPrimaryClick: (_, event) => item.activate(event),
+                onSecondaryClick: (_, event) => item.openMenu(event),
+            }));
+        }),
+    ],
+});
+
+// Music Widget
+const MusicWidget = () => Widget.Box({
+    className: "music-widget",
+    visible: Mpris.bind("players").transform(p => p.length > 0),
+    children: [
+        Widget.Icon({
+            icon: "audio-x-generic-symbolic",
+        }),
+        Widget.Label({
+            truncate: "end",
+            maxWidthChars: 40,
+            label: Mpris.bind("players").transform(players => {
+                if (players.length === 0) return "";
+                const player = players[0];
+                return `${player.trackArtists.join(", ")} - ${player.trackTitle}`;
+            }),
+        }),
+    ],
+});
+
+// The Bar
+export default () => Widget.Window({
+    name: "bar",
+    className: "bar",
+    anchor: ["top", "left", "right"],
+    exclusive: true,
+    child: Widget.CenterBox({
+        startWidget: Widget.Box({
+            className: "bar-widget",
+            children: [
+                Widget.Button({
+                    className: "widget-button launcher-button",
+                    child: Widget.Label({
+                        label: "",
+                    }),
+                    onClicked: () => Utils.execAsync("ags -t applauncher"),
+                }),
+                Workspaces(),
+                WindowTitle(),
+            ],
+        }),
+        centerWidget: Widget.Box({
+            className: "bar-widget",
+            children: [
+                MusicWidget(),
+            ],
+        }),
+        endWidget: Widget.Box({
+            className: "bar-widget",
+            hpack: "end",
+            children: [
+                NetworkWidget(),
+                VolumeWidget(),
+                BatteryWidget(),
+                Clock(),
+                Tray(),
+                Widget.Button({
+                    className: "widget-button power-button",
+                    child: Widget.Label({
+                        label: "󰐥",
+                    }),
+                    onClicked: () => Utils.execAsync("ags -t powermenu"),
+                }),
+            ],
+        }),
+    }),
+});
+EOF
+
+# Widget de Overview (similar al de end-4/dots-hyprland)
+cat > ~/.config/ags/widgets/overview.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import * as Utils from "resource:///com/github/Aylur/ags/utils.js";
+import App from "resource:///com/github/Aylur/ags/app.js";
+import Hyprland from "resource:///com/github/Aylur/ags/service/hyprland.js";
+
+const WorkspaceBox = () => Widget.Box({
+    vertical: true,
+    className: "overview-workspaces",
+    children: Hyprland.bind("workspaces").transform(workspaces => {
+        return workspaces.map(ws => {
+            const clients = Hyprland.clients.filter(c => c.workspace.id === ws.id);
+            
+            return Widget.Box({
+                className: "overview-workspace",
+                vertical: true,
+                children: [
+                    Widget.Label({
+                        className: "overview-workspace-label",
+                        label: `Workspace ${ws.id}`,
+                    }),
+                    Widget.Box({
+                        className: "overview-workspace-clients",
+                        children: clients.map(client => Widget.Button({
+                            className: "overview-window",
+                            child: Widget.Box({
+                                children: [
+                                    Widget.Icon({
+                                        icon: "application-x-executable-symbolic",
+                                    }),
+                                    Widget.Label({
+                                        label: client.title || client.class || "Unknown",
+                                        truncate: "end",
+                                        maxWidthChars: 20,
+                                    }),
+                                ],
+                            }),
+                            onClicked: () => {
+                                Utils.execAsync(`hyprctl dispatch focuswindow address:${client.address}`);
+                                App.toggleWindow("overview");
+                            },
+                        })),
+                    }),
+                ],
+            });
+        });
+    }),
+});
+
+const SearchBox = () => Widget.Box({
+    className: "overview-search",
+    vertical: true,
+    children: [
+        Widget.Entry({
+            className: "overview-search-entry",
+            hexpand: true,
+            placeholder: "Search...",
+            onAccept: (entry) => {
+                Utils.execAsync(`fuzzel -d -I ${entry.text}`);
+                App.toggleWindow("overview");
+                entry.text = "";
+            },
+        }),
+    ],
+});
+
+export default () => Widget.Window({
+    name: "overview",
+    visible: false,
+    exclusive: true,
+    focusable: true,
+    popup: true,
+    anchor: ["center"],
+    child: Widget.Box({
+        className: "overview",
+        vertical: true,
+        children: [
+            Widget.Box({
+                className: "overview-header",
+                children: [
+                    Widget.Label({
+                        className: "overview-title",
+                        label: "Overview",
+                    }),
+                    Widget.Button({
+                        className: "overview-close",
+                        child: Widget.Label({
+                            label: "󰅖",
+                        }),
+                        onClicked: () => App.toggleWindow("overview"),
+                    }),
+                ],
+            }),
+            SearchBox(),
+            WorkspaceBox(),
+        ],
+    }),
+});
+EOF
+
+# Widget de OSD (Mensajes On-Screen Display)
+cat > ~/.config/ags/widgets/osd.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import Audio from "resource:///com/github/Aylur/ags/service/audio.js";
+import Battery from "resource:///com/github/Aylur/ags/service/battery.js";
+import App from "resource:///com/github/Aylur/ags/app.js";
+
+// Volume OSD
+const VolumeIndicator = () => Widget.Box({
+    className: "osd-indicator",
+    vertical: true,
+    children: [
+        Widget.Icon({
+            icon: Audio.bind("speaker").transform(s => {
+                if (!s) return "audio-volume-muted-symbolic";
+                if (s.muted) return "audio-volume-muted-symbolic";
+                if (s.volume < 30) return "audio-volume-low-symbolic";
+                if (s.volume < 70) return "audio-volume-medium-symbolic";
+                return "audio-volume-high-symbolic";
+            }),
+            size: 48,
+        }),
+        Widget.Slider({
+            className: "osd-slider",
+            hexpand: true,
+            value: Audio.bind("speaker").transform(s => s?.volume || 0),
+            onChange: value => Audio.speaker.volume = value,
+        }),
+        Widget.Label({
+            className: "osd-label",
+            label: Audio.bind("speaker").transform(s => s ? `Volume: ${Math.round(s.volume)}%` : "Volume: 0%"),
+        }),
+    ],
+});
+
+// Brightness OSD
+const BrightnessIndicator = () => Widget.Box({
+    className: "osd-indicator",
+    vertical: true,
+    children: [
+        Widget.Icon({
+            icon: "display-brightness-symbolic",
+            size: 48,
+        }),
+        Widget.Label({
+            className: "osd-label",
+            label: "Brightness Adjusted",
+        }),
+    ],
+});
+
+// Battery OSD
+const BatteryIndicator = () => Widget.Box({
+    className: "osd-indicator",
+    vertical: true,
+    children: [
+        Widget.Icon({
+            icon: Battery.bind("percent").transform(p => {
+                if (Battery.charging) return "battery-charging-symbolic";
+                if (p < 10) return "battery-empty-symbolic";
+                if (p < 30) return "battery-low-symbolic";
+                if (p < 60) return "battery-good-symbolic";
+                return "battery-full-symbolic";
+            }),
+            size: 48,
+        }),
+        Widget.Label({
+            className: "osd-label",
+            label: Battery.bind("percent").transform(p => `Battery: ${p}%`),
+        }),
+    ],
+});
+
+export default () => Widget.Window({
+    name: "osd",
+    className: "osd",
+    anchor: ["right", "top"],
+    exclusive: false,
+    focusable: false,
+    popup: true,
+    visible: false,
+    child: Widget.Stack({
+        transition: "slide_left",
+        items: [
+            ["volume", VolumeIndicator()],
+            ["brightness", BrightnessIndicator()],
+            ["battery", BatteryIndicator()],
+        ],
+    }),
+});
+EOF
+
+# Widget de CheatSheet (lista de atajos)
+cat > ~/.config/ags/widgets/cheatsheet.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import App from "resource:///com/github/Aylur/ags/app.js";
+
+// Definir los atajos de teclado para mostrar
+const shortcuts = [
+    { keys: "Super + Enter", description: "Abrir terminal" },
+    { keys: "Super + Q", description: "Cerrar ventana activa" },
+    { keys: "Super + E", description: "Abrir explorador de archivos" },
+    { keys: "Super + B", description: "Abrir navegador" },
+    { keys: "Super + Space", description: "Abrir launcher de aplicaciones" },
+    { keys: "Super + F", description: "Ventana a pantalla completa" },
+    { keys: "Super + Tab", description: "Abrir vista general (overview)" },
+    { keys: "Super + /", description: "Mostrar esta cheatsheet" },
+    { keys: "Super + D", description: "Abrir lanzador de aplicaciones" },
+    { keys: "Super + X", description: "Abrir menú de apagado" },
+    { keys: "Super + 1-0", description: "Cambiar al espacio de trabajo 1-10" },
+    { keys: "Super + Shift + 1-0", description: "Mover ventana al espacio 1-10" },
+    { keys: "Super + ↑/↓/←/→", description: "Cambiar foco de ventana" },
+    { keys: "Print", description: "Captura de pantalla (clipboard)" },
+    { keys: "Shift + Print", description: "Captura de área (clipboard)" },
+    { keys: "Ctrl + Print", description: "Guardar captura pantalla" },
+    { keys: "Ctrl + Shift + Print", description: "Guardar captura de área" },
+];
+
+// Widget de ShortcutRow
+const ShortcutRow = (shortcut) => Widget.Box({
+    className: "shortcut-row",
+    children: [
+        Widget.Label({
+            className: "shortcut-keys",
+            label: shortcut.keys,
+            xalign: 0,
+        }),
+        Widget.Label({
+            className: "shortcut-description",
+            label: shortcut.description,
+            xalign: 0,
+        }),
+    ],
+});
+
+export default () => Widget.Window({
+    name: "cheatsheet",
+    className: "cheatsheet",
+    visible: false,
+    anchor: ["center"],
+    exclusive: true,
+    focusable: true,
+    popup: true,
+    child: Widget.Box({
+        vertical: true,
+        children: [
+            Widget.Box({
+                className: "cheatsheet-header",
+                children: [
+                    Widget.Label({
+                        className: "cheatsheet-title",
+                        label: "Atajos de Teclado",
+                    }),
+                    Widget.Button({
+                        className: "cheatsheet-close",
+                        child: Widget.Label({
+                            label: "󰅖",
+                        }),
+                        onClicked: () => App.toggleWindow("cheatsheet"),
+                    }),
+                ],
+            }),
+            Widget.Box({
+                className: "cheatsheet-content",
+                vertical: true,
+                children: shortcuts.map(shortcut => ShortcutRow(shortcut)),
+            }),
+        ],
+    }),
+});
+EOF
+
+# Widget de AppLauncher
+cat > ~/.config/ags/widgets/applauncher.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import App from "resource:///com/github/Aylur/ags/app.js";
+import Applications from "resource:///com/github/Aylur/ags/service/applications.js";
+import * as Utils from "resource:///com/github/Aylur/ags/utils.js";
+
+// Widget de aplicación individual
+const AppItem = app => Widget.Button({
+    className: "launcher-entry",
+    onClicked: () => {
+        app.launch();
+        App.toggleWindow("applauncher");
+    },
+    child: Widget.Box({
+        children: [
+            Widget.Icon({
+                className: "launcher-icon",
+                icon: app.icon_name || "application-x-executable-symbolic",
+                size: 48,
+            }),
+            Widget.Box({
+                vertical: true,
+                children: [
+                    Widget.Label({
+                        className: "launcher-title",
+                        label: app.name,
+                        xalign: 0,
+                        truncate: "end",
+                        maxWidthChars: 20,
+                    }),
+                    Widget.Label({
+                        className: "launcher-description",
+                        label: app.description || "",
+                        xalign: 0,
+                        truncate: "end",
+                        maxWidthChars: 30,
+                    }),
+                ],
+            }),
+        ],
+    }),
+});
+
+export default () => Widget.Window({
+    name: "applauncher",
+    className: "launcher",
+    visible: false,
+    exclusive: true,
+    focusable: true,
+    popup: true,
+    anchor: ["center"],
+    child: Widget.Box({
+        vertical: true,
+        children: [
+            Widget.Entry({
+                className: "launcher-search",
+                hexpand: true,
+                placeholder: "Buscar aplicaciones...",
+                onAccept: (entry) => {
+                    // Buscar y lanzar la primera aplicación que coincida
+                    const app = Applications.query(entry.text)[0];
+                    if (app) {
+                        app.launch();
+                        App.toggleWindow("applauncher");
+                        entry.text = "";
+                    }
+                },
+                onChange: (entry) => {
+                    // Actualizar la lista de aplicaciones al escribir
+                    const query = entry.text;
+                    const apps = query.length > 0 
+                        ? Applications.query(query)
+                        : Applications.list;
+                        
+                    const box = entry.parent.get_children()[1];
+                    box.children = apps.map(app => AppItem(app));
+                },
+            }),
+            Widget.ScrollBox({
+                className: "launcher-apps",
+                hscroll: "never",
+                vscroll: "automatic",
+                height: 500,
+                child: Widget.Box({
+                    vertical: true,
+                    children: Applications.bind("list").transform(apps => 
+                        apps.map(app => AppItem(app))
+                    ),
+                }),
+            }),
+        ],
+    }),
+});
+EOF
+
+# Widget de PowerMenu
+cat > ~/.config/ags/widgets/powermenu.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import App from "resource:///com/github/Aylur/ags/app.js";
+import * as Utils from "resource:///com/github/Aylur/ags/utils.js";
+
+// Action button
+const PowerButton = ({ icon, label, action, className = "" }) => Widget.Button({
+    className: `powermenu-button ${className}`,
+    child: Widget.Box({
+        vertical: true,
+        children: [
+            Widget.Label({
+                label: icon,
+                className: "powermenu-icon",
+            }),
+            Widget.Label({
+                label: label,
+                className: "powermenu-label",
+            }),
+        ],
+    }),
+    onClicked: () => {
+        App.closeWindow("powermenu");
+        Utils.execAsync(action);
+    },
+});
+
+export default () => Widget.Window({
+    name: "powermenu",
+    className: "powermenu",
+    visible: false,
+    anchor: ["center"],
+    exclusive: true,
+    focusable: true,
+    popup: true,
+    child: Widget.Box({
+        vertical: true,
+        children: [
+            Widget.Box({
+                className: "powermenu-header",
+                children: [
+                    Widget.Label({
+                        className: "powermenu-title",
+                        label: "Power Menu",
+                    }),
+                    Widget.Button({
+                        className: "powermenu-close",
+                        child: Widget.Label({
+                            label: "󰅖",
+                        }),
+                        onClicked: () => App.toggleWindow("powermenu"),
+                    }),
+                ],
+            }),
+            Widget.Box({
+                className: "powermenu-buttons",
+                homogeneous: true,
+                children: [
+                    PowerButton({
+                        icon: "󰤄",
+                        label: "Suspend",
+                        action: "systemctl suspend",
+                        className: "suspend",
+                    }),
+                    PowerButton({
+                        icon: "󰜉",
+                        label: "Reboot",
+                        action: "systemctl reboot",
+                        className: "reboot",
+                    }),
+                    PowerButton({
+                        icon: "󰐥",
+                        label: "Shutdown",
+                        action: "systemctl poweroff",
+                        className: "shutdown",
+                    }),
+                    PowerButton({
+                        icon: "󰍃",
+                        label: "Logout",
+                        action: "hyprctl dispatch exit",
+                        className: "logout",
+                    }),
+                    PowerButton({
+                        icon: "󰌾",
+                        label: "Lock",
+                        action: "swaylock",
+                        className: "lock",
+                    }),
+                ],
+            }),
+        ],
+    }),
+});
+EOF
+
+# Widget de QuickSettings
+cat > ~/.config/ags/widgets/quicksettings.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import App from "resource:///com/github/Aylur/ags/app.js";
+import Audio from "resource:///com/github/Aylur/ags/service/audio.js";
+import Network from "resource:///com/github/Aylur/ags/service/network.js";
+import Battery from "resource:///com/github/Aylur/ags/service/battery.js";
+import * as Utils from "resource:///com/github/Aylur/ags/utils.js";
+
+// Slider with icon
+const IconSlider = ({ icon, value, onChange }) => Widget.Box({
+    className: "quicksettings-slider",
+    children: [
+        Widget.Icon({
+            icon: icon,
+            size: 24,
+        }),
+        Widget.Slider({
+            className: "slider",
+            hexpand: true,
+            drawValue: false,
+            value: value,
+            onChange: onChange,
+        }),
+    ],
+});
+
+// Toggle button
+const ToggleButton = ({ icon, active, label, onClicked }) => Widget.Button({
+    className: `quicksettings-toggle ${active ? "active" : ""}`,
+    child: Widget.Box({
+        children: [
+            Widget.Icon({
+                icon: icon,
+                size: 24,
+            }),
+            Widget.Label({
+                label: label,
+            }),
+        ],
+    }),
+    onClicked: onClicked,
+});
+
+export default () => Widget.Window({
+    name: "quicksettings",
+    className: "quicksettings",
+    visible: false,
+    anchor: ["top", "right"],
+    exclusive: true,
+    focusable: true,
+    popup: true,
+    child: Widget.Box({
+        vertical: true,
+        children: [
+            Widget.Box({
+                className: "quicksettings-header",
+                children: [
+                    Widget.Label({
+                        className: "quicksettings-title",
+                        label: "Quick Settings",
+                    }),
+                    Widget.Button({
+                        className: "quicksettings-close",
+                        child: Widget.Label({
+                            label: "󰅖",
+                        }),
+                        onClicked: () => App.toggleWindow("quicksettings"),
+                    }),
+                ],
+            }),
+            Widget.Box({
+                className: "quicksettings-volume",
+                vertical: true,
+                children: [
+                    Widget.Label({
+                        xalign: 0,
+                        label: "Volume",
+                    }),
+                    IconSlider({
+                        icon: Audio.bind("speaker").transform(s => {
+                            if (!s) return "audio-volume-muted-symbolic";
+                            if (s.muted) return "audio-volume-muted-symbolic";
+                            if (s.volume < 30) return "audio-volume-low-symbolic";
+                            if (s.volume < 70) return "audio-volume-medium-symbolic";
+                            return "audio-volume-high-symbolic";
+                        }),
+                        value: Audio.bind("speaker").transform(s => s?.volume || 0),
+                        onChange: value => Audio.speaker.volume = value,
+                    }),
+                    Widget.Button({
+                        className: "mute-button",
+                        child: Widget.Box({
+                            children: [
+                                Widget.Icon({
+                                    icon: Audio.bind("speaker").transform(s => 
+                                        s?.muted ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
+                                    ),
+                                }),
+                                Widget.Label({
+                                    label: Audio.bind("speaker").transform(s => 
+                                        s?.muted ? "Unmute" : "Mute"
+                                    ),
+                                }),
+                            ],
+                        }),
+                        onClicked: () => {
+                            if (Audio.speaker) 
+                                Audio.speaker.muted = !Audio.speaker.muted;
+                        },
+                    }),
+                ],
+            }),
+            Widget.Box({
+                className: "quicksettings-toggles",
+                children: [
+                    ToggleButton({
+                        icon: Network.wifi?.bind("enabled").transform(e => 
+                            e ? "network-wireless-symbolic" : "network-wireless-offline-symbolic"
+                        ),
+                        active: Network.wifi?.bind("enabled"),
+                        label: "WiFi",
+                        onClicked: () => {
+                            if (Network.wifi) 
+                                Network.wifi.enabled = !Network.wifi.enabled;
+                        },
+                    }),
+                    ToggleButton({
+                        icon: Network.bluetooth?.bind("enabled").transform(e => 
+                            e ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
+                        ),
+                        active: Network.bluetooth?.bind("enabled"),
+                        label: "Bluetooth",
+                        onClicked: () => {
+                            if (Network.bluetooth) 
+                                Network.bluetooth.enabled = !Network.bluetooth.enabled;
+                        },
+                    }),
+                    ToggleButton({
+                        icon: "display-brightness-symbolic",
+                        active: false,
+                        label: "Night Light",
+                        onClicked: () => Utils.execAsync("wlsunset -t 4500"),
+                    }),
+                ],
+            }),
+            Widget.Box({
+                className: "quicksettings-system",
+                children: [
+                    ToggleButton({
+                        icon: "system-shutdown-symbolic",
+                        label: "Power Menu",
+                        onClicked: () => {
+                            App.toggleWindow("powermenu");
+                            App.closeWindow("quicksettings");
+                        },
+                    }),
+                    ToggleButton({
+                        icon: "system-lock-screen-symbolic",
+                        label: "Lock",
+                        onClicked: () => {
+                            Utils.execAsync("swaylock");
+                            App.closeWindow("quicksettings");
+                        },
+                    }),
+                ],
+            }),
+        ],
+    }),
+});
+EOF
+
+# Widget de Notificaciones
+cat > ~/.config/ags/widgets/notifications.js << 'EOF'
+import Widget from "resource:///com/github/Aylur/ags/widget.js";
+import Notifications from "resource:///com/github/Aylur/ags/service/notifications.js";
+
+// Notification Widget
+const NotificationWidget = notification => Widget.Box({
+    className: `notification ${notification.urgency}`,
+    vertical: true,
+    children: [
+        Widget.Box({
+            children: [
+                Widget.Icon({
+                    icon: notification.app_icon || "dialog-information-symbolic",
+                    size: 32,
+                }),
+                Widget.Box({
+                    hexpand: true,
+                    vertical: true,
+                    children: [
+                        Widget.Label({
+                            xalign: 0,
+                            className: "notification-title",
+                            truncate: "end",
+                            maxWidthChars: 40,
+                            label: notification.summary,
+                        }),
+                        Widget.Label({
+                            xalign: 0,
+                            className: "notification-body",
+                            truncate: "end",
+                            maxWidthChars: 60,
+                            label: notification.body,
+                        }),
+                    ],
+                }),
+                Widget.Button({
+                    className: "notification-close",
+                    child: Widget.Label({
+                        label: "󰅖",
+                    }),
+                    onClicked: () => notification.close(),
+                }),
+            ],
+        }),
+        Widget.Box({
+            className: "notification-actions",
+            children: notification.actions.map(action => Widget.Button({
+                className: "notification-action",
+                child: Widget.Label({
+                    label: action.label,
+                }),
+                onClicked: () => {
+                    notification.invoke(action.id);
+                    notification.close();
+                },
+            })),
+        }),
+    ],
+});
+
+export default () => Widget.Window({
+    name: "notifications",
+    anchor: ["top", "right"],
+    child: Widget.Box({
+        className: "notifications-container",
+        vertical: true,
+        children: Notifications.bind("notifications").transform(notifications => {
+            return notifications.map(notification => NotificationWidget(notification));
+        }),
+    }),
+});
+EOF
+
+# Crear archivo de estilo
+cat > ~/.config/ags/style.css << 'EOF'
+* {
+    font-family: "JetBrainsMono Nerd Font", "Rubik", sans-serif;
+    font-size: 14px;
+}
+
+.bar {
+    background-color: rgba(30, 30, 46, 0.9);
+    color: #cdd6f4;
+    padding: 8px;
+    border-radius: 0 0 12px 12px;
+}
+
+.bar-widget {
+    margin: 0 5px;
+}
+
+.workspaces button {
+    padding: 0 5px;
+    background-color: transparent;
+    color: #cdd6f4;
+    font-size: 16px;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 99px;
+    margin: 0 2px;
+}
+
+.workspaces button.active {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+
+.window-title {
+    font-weight: bold;
     margin-left: 10px;
 }
 
-.modules-right {
-    margin-right: 10px;
+.widget-button {
+    border-radius: 99px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 10px;
+    background-color: transparent;
 }
 
-#battery.charging, #battery.plugged {
-    color: #a6e3a1;
+.widget-button:hover {
+    background-color: rgba(49, 50, 68, 0.7);
 }
 
-#battery.critical:not(.charging) {
-    background-color: #f38ba8;
-    color: #1e1e2e;
-    border-radius: 8px;
+.clock {
+    font-weight: bold;
 }
 
-@keyframes blink {
-    to {
-        background-color: #cdd6f4;
-        color: #1e1e2e;
-    }
+.battery-widget, .volume-widget, .network-widget {
+    margin: 0 5px;
 }
 
-#battery.warning:not(.charging) {
-    background-color: #fab387;
-    color: #1e1e2e;
-    border-radius: 8px;
-}
-
-#network.disconnected {
-    background-color: #f38ba8;
-    color: #1e1e2e;
-    border-radius: 8px;
-}
-
-#custom-launcher {
-    color: #cba6f7;
-    font-size: 20px;
-    margin-right: 10px;
-}
-
-#temperature.critical {
-    background-color: #f38ba8;
-    color: #1e1e2e;
-    border-radius: 8px;
-}
-
-#tray > .passive {
-    -gtk-icon-effect: dim;
-}
-
-#tray > .needs-attention {
-    -gtk-icon-effect: highlight;
-    background-color: #fab387;
-    border-radius: 8px;
-}
-
-#mpris {
+.music-widget {
     background-color: rgba(49, 50, 68, 0.5);
     border-radius: 8px;
-    margin: 5px;
     padding: 0 10px;
 }
+
+.launcher-button {
+    font-size: 18px;
+    padding: 0 10px;
+}
+
+.power-button {
+    font-size: 18px;
+    padding: 0 10px;
+}
+
+.system-tray {
+    margin-left: 10px;
+}
+
+.tray-item {
+    margin: 0 2px;
+}
+
+.overview {
+    background-color: rgba(30, 30, 46, 0.8);
+    border-radius: 12px;
+    border: 2px solid #cba6f7;
+    padding: 20px;
+}
+
+.overview-header {
+    margin-bottom: 20px;
+}
+
+.overview-title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.overview-close {
+    margin-left: auto;
+    padding: 8px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+.overview-search {
+    margin-bottom: 20px;
+}
+
+.overview-search-entry {
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+.overview-workspace {
+    background-color: rgba(49, 50, 68, 0.7);
+    border-radius: 10px;
+    margin: 5px;
+    padding: 10px;
+}
+
+.overview-workspace-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.overview-window {
+    background-color: #1e1e2e;
+    border-radius: 8px;
+    border: 1px solid #89b4fa;
+    color: #cdd6f4;
+    padding: 5px;
+    margin: 3px;
+}
+
+.cheatsheet {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 12px;
+    border: 2px solid #f9e2af;
+    padding: 20px;
+}
+
+.cheatsheet-header {
+    margin-bottom: 20px;
+}
+
+.cheatsheet-title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.cheatsheet-close {
+    margin-left: auto;
+    padding: 8px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+.shortcut-row {
+    padding: 8px;
+    margin: 2px;
+}
+
+.shortcut-keys {
+    font-weight: bold;
+    min-width: 150px;
+}
+
+.launcher {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 12px;
+    border: 2px solid #89b4fa;
+    padding: 15px;
+}
+
+.launcher-search {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+.launcher-entry {
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.launcher-entry:hover {
+    background-color: rgba(49, 50, 68, 0.7);
+}
+
+.launcher-icon {
+    min-width: 48px;
+    min-height: 48px;
+    margin-right: 8px;
+}
+
+.launcher-title {
+    font-weight: bold;
+}
+
+.launcher-description {
+    opacity: 0.8;
+    font-size: 12px;
+}
+
+.notification {
+    background-color: rgba(30, 30, 46, 0.95);
+    border-radius: 10px;
+    border-left: 4px solid #89b4fa;
+    padding: 12px;
+    margin: 5px 0;
+}
+
+.notification.critical {
+    border-left: 4px solid #f38ba8;
+}
+
+.notification-title {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.notification-close {
+    padding: 4px;
+    border-radius: 99px;
+    margin-left: 10px;
+    min-width: 24px;
+    min-height: 24px;
+}
+
+.notification-actions {
+    margin-top: 10px;
+}
+
+.notification-action {
+    margin-right: 5px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+.powermenu {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 20px;
+    border: 2px solid #f5c2e7;
+    padding: 20px;
+}
+
+.powermenu-header {
+    margin-bottom: 20px;
+}
+
+.powermenu-title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.powermenu-close {
+    margin-left: auto;
+    padding: 8px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+.powermenu-buttons {
+    padding: 10px;
+}
+
+.powermenu-button {
+    padding: 20px;
+    font-size: 32px;
+    border-radius: 15px;
+    margin: 10px;
+    min-width: 100px;
+    min-height: 100px;
+    background-color: #313244;
+}
+
+.powermenu-button:hover {
+    background-color: rgba(49, 50, 68, 0.7);
+}
+
+.powermenu-icon {
+    font-size: 32px;
+}
+
+.powermenu-label {
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+.quicksettings {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 15px;
+    border: 2px solid #94e2d5;
+    padding: 15px;
+}
+
+.quicksettings-header {
+    margin-bottom: 20px;
+}
+
+.quicksettings-title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.quicksettings-close {
+    margin-left: auto;
+    padding: 8px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+.quicksettings-volume, .quicksettings-toggles, .quicksettings-system {
+    margin-bottom: 15px;
+    background-color: #313244;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.quicksettings-slider {
+    margin: 10px 0;
+}
+
+.slider trough highlight {
+    background-color: #89b4fa;
+    border-radius: 10px;
+}
+
+.slider trough {
+    background-color: #45475a;
+    border-radius: 10px;
+    min-height: 6px;
+    min-width: 150px;
+}
+
+.mute-button, .quicksettings-toggle {
+    padding: 8px;
+    border-radius: 8px;
+    margin: 5px;
+    background-color: #45475a;
+}
+
+.quicksettings-toggle.active {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+
+.osd {
+    background-color: rgba(30, 30, 46, 0.9);
+    border-radius: 10px;
+    padding: 15px;
+    border: 2px solid #cba6f7;
+    color: #cdd6f4;
+}
+
+.osd-indicator {
+    padding: 10px;
+}
+
+.osd-slider {
+    min-width: 300px;
+    margin: 10px 0;
+}
+
+.osd-label {
+    font-weight: bold;
+    margin-top: 5px;
+}
 EOF
-print_success "Waybar configurado"
+
+print_success "AGS configurado con barra de estado y widgets desde cero"
 
 # --- 10) CONFIGURAR FUZZEL ---
 print_message "Configurando Fuzzel..."
@@ -1567,17 +2450,7 @@ else
     print_success "Controladores NVIDIA verificados"
 fi
 
-# --- 20) CREAR DIRECTORIOS NECESARIOS ---
-print_message "Creando directorios adicionales necesarios..."
-mkdir -p ~/Pictures/Screenshots
-print_success "Directorios adicionales creados"
-
-# --- 21) LIMPIAR ARCHIVOS TEMPORALES ---
-print_message "Limpiando archivos temporales..."
-rm -rf /tmp/end4-dots
-print_success "Archivos temporales eliminados"
-
-# --- 22) MENSAJE FINAL ---
+# --- 20) MENSAJE FINAL ---
 print_message "La post-instalación se ha completado exitosamente."
 print_message ""
 print_message "Información de sistema:"
@@ -1585,22 +2458,25 @@ print_message "- CPU: AMD Ryzen 9 5900HX"
 print_message "- GPU: NVIDIA RTX 3080"
 print_message "- WM: Hyprland (Wayland)"
 print_message "- Terminal: Kitty con Bash"
-print_message "- Shell Prompt: Starship"
+print_message "- Status Bar/Widgets: Aylur's GTK Shell (creada desde cero)"
 print_message ""
-print_message "Atajos de teclado importantes:"
-print_message "• Super: Abrir vista general/launcher de AGS"
-print_message "• Super + Enter: Abrir kitty (terminal)"
-print_message "• Super + /: Mostrar ayuda con todos los atajos"
+print_message "Atajos de teclado principales:"
+print_message "• Super + Return: Abrir kitty"
 print_message "• Super + Q: Cerrar ventana activa"
-print_message "• Super + SHIFT + Q: Salir de Hyprland"
 print_message "• Super + F: Ventana en pantalla completa"
+print_message "• Super + Space: Lanzador de aplicaciones"
+print_message "• Super + Tab: Vista general/overview"
+print_message "• Super + /: Mostrar cheatsheet con todos los atajos"
 print_message "• Super + [1-0]: Cambiar a espacio de trabajo"
 print_message "• PrintScreen: Captura de pantalla completa"
 print_message ""
-print_message "Nota: Si encuentras problemas de compatibilidad con NVIDIA,"
-print_message "consulta la wiki de Arch o Hyprland para soluciones específicas."
+print_message "Para AGS (Status Bar/Widgets):"
+print_message "• Super + Tab: Abre la vista general (overview)"
+print_message "• Super + /: Muestra la hoja de atajos (cheatsheet)"
+print_message "• Super + D: Abre el lanzador de aplicaciones"
+print_message "• Super + X: Abre el menú de apagado"
 print_message ""
 print_message "Para que los cambios tengan efecto, cierra sesión y vuelve a iniciar, o ejecuta:"
 print_message "killall -9 Hyprland && Hyprland"
 print_message ""
-print_message "¡Disfruta de tu nuevo sistema ArchLinux personalizado optimizado para NVIDIA!"
+print_message "¡Disfruta de tu nuevo sistema ArchLinux personalizado!"
