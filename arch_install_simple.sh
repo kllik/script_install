@@ -175,7 +175,7 @@ pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
     xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
     adwaita-icon-theme gnome-themes-extra blueman \
     polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
-    mesa vulkan-radeon ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly \
+    mesa vulkan-radeon \
     libreoffice-fresh imv glow wget
 print_success "Paquetes clave instalados"
 
