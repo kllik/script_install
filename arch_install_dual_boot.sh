@@ -171,7 +171,7 @@ print_message "Instalando entorno Wayland y Hyprland..."
 pacman -S --noconfirm --needed hyprland xorg-xwayland waybar
 
 print_message "Instalando utilidades básicas..."
-pacman -S --noconfirm --needed kitty networkmanager bluez bluez-utils
+pacman -S --noconfirm --needed kitty rofi networkmanager bluez bluez-utils
 
 print_message "Instalando multimedia y soporte de audio..."
 pacman -S --noconfirm --needed pipewire pipewire-pulse pipewire-alsa wireplumber
@@ -253,7 +253,8 @@ env = QT_WAYLAND_DISABLE_WINDOWDECORATION,1
 env = MOZ_ENABLE_WAYLAND,1
 
 # Autostart
-exec-once = waybar
+exec-once = waybar &
+exec-once = sleep 2 && waybar # Intento de inicio de waybar con retraso como respaldo
 
 # Input
 input {
@@ -276,8 +277,18 @@ general {
     layout = dwindle
 }
 
+# Decoración - Versión correcta para Hyprland actual
 decoration {
     rounding = 10
+    
+    # La sección blur tiene que estar dentro de decoration
+    blur {
+        enabled = true
+        size = 3
+        passes = 1
+    }
+    
+    # Estos son atributos directos de decoration, no dentro de una subsección
     drop_shadow = true
     shadow_range = 4
     shadow_render_power = 3
@@ -312,17 +323,19 @@ windowrule = float, ^(pavucontrol)$
 windowrule = float, ^(blueman-manager)$
 windowrule = float, ^(nm-connection-editor)$
 
-# Atajos de teclado
+# Atajos de teclado - Definición del modificador principal
 $mainMod = SUPER
 
+# Aplicaciones y controles de ventana
 bind = $mainMod, Q, exec, kitty
-bind = $mainMod, C, killactive,
-bind = $mainMod, M, exit,
+bind = $mainMod, C, killactive, 
+bind = $mainMod, M, exit, 
 bind = $mainMod, E, exec, thunar
-bind = $mainMod SHIFT, F, togglefloating,
-bind = $mainMod, P, pseudo,
-bind = $mainMod, F, fullscreen,
-bind = $mainMod, J, togglesplit,
+bind = $mainMod SHIFT, F, togglefloating, 
+bind = $mainMod, R, exec, rofi -show drun
+bind = $mainMod, P, pseudo, 
+bind = $mainMod, F, fullscreen, 
+bind = $mainMod, J, togglesplit, 
 bind = $mainMod, Z, exec, grim -g "$(slurp)" ~/Imágenes/$(date +%Y-%m-%d_%H-%M-%S).png
 
 # Movimiento entre ventanas
@@ -497,6 +510,17 @@ window#waybar.hidden {
 }
 EOF
 
+# Script de autostart para asegurar que Waybar inicie correctamente
+mkdir -p /home/antonio/.config/autostart
+cat > /home/antonio/.config/autostart/waybar.desktop << EOF
+[Desktop Entry]
+Type=Application
+Name=Waybar
+Exec=waybar
+Terminal=false
+Categories=System;
+EOF
+
 # Crear archivo de perfil para variables de entorno para Wayland
 cat > /home/antonio/.profile << EOF
 # Variables de entorno para Wayland
@@ -533,6 +557,7 @@ print_message "5. Conecta a Internet con 'nmtui'"
 print_message "6. Para instalar paquetes adicionales, ejecuta: sudo pacman -Syu"
 print_message "7. Alt+Shift para cambiar entre teclado US y ES"
 print_message "8. Super+Z para capturar pantalla (seleccionando zona)"
+print_message "9. Super+R para abrir el lanzador de aplicaciones rofi"
 
 # Esto ayudará a mantener organizado el script
 sleep 2
