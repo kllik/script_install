@@ -89,7 +89,7 @@ print_success "Subvolúmenes BTRFS montados"
 
 # --- 5) INSTALAR SISTEMA BASE ---
 print_message "Instalando sistema base (esto puede tomar tiempo)..."
-pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs
+pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs nano grub efibootmgr sudo networkmanager
 print_success "Sistema base instalado"
 
 # --- 6) GENERAR FSTAB ---
@@ -128,12 +128,7 @@ print_warning() {
     echo -e "${YELLOW}[ADVERTENCIA]${NC} $1"
 }
 
-# --- 8) INSTALAR NANO ---
-print_message "Instalando nano..."
-pacman -Sy nano --noconfirm
-print_success "Nano instalado"
-
-# --- 9) CONFIGURAR LOCALE Y ZONA HORARIA ---
+# --- 8) CONFIGURAR LOCALE Y ZONA HORARIA ---
 print_message "Configurando locale y zona horaria..."
 sed -i 's/#es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
@@ -143,20 +138,12 @@ echo "LANG=es_ES.UTF-8" > /etc/locale.conf
 # Configurar teclado con múltiples layouts (US y ES)
 echo "KEYMAP=us" > /etc/vconsole.conf
 mkdir -p /etc/X11/xorg.conf.d
-cat > /etc/X11/xorg.conf.d/00-keyboard.conf << EOF
-Section "InputClass"
-    Identifier "system-keyboard"
-    MatchIsKeyboard "on"
-    Option "XkbLayout" "us,es"
-    Option "XkbOptions" "grp:alt_shift_toggle"
-EndSection
-EOF
 
 ln -sf /usr/share/zoneinfo/Europe/Madrid /etc/localtime
 hwclock --systohc
 print_success "Locale, zona horaria y teclado configurados"
 
-# --- 10) HOSTNAME Y HOSTS ---
+# --- 9) HOSTNAME Y HOSTS ---
 print_message "Configurando hostname..."
 echo "host" > /etc/hostname
 cat > /etc/hosts << EOF
@@ -166,96 +153,86 @@ cat > /etc/hosts << EOF
 EOF
 print_success "Hostname configurado"
 
-# --- 11) CONTRASEÑA ROOT ---
+# --- 10) CONTRASEÑA ROOT ---
 print_message "A continuación deberás configurar la contraseña de root:"
 passwd
 
-# --- 12) HABILITAR MULTILIB ---
+# --- 11) HABILITAR MULTILIB ---
 print_message "Habilitando repositorio multilib..."
 sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Repositorio multilib habilitado"
 
-# --- 13) INSTALAR PAQUETES CLAVE ---
-print_message "Instalando paquetes clave (esto tomará tiempo)..."
-pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms nvidia-prime nvidia-settings lib32-nvidia-utils \
-    hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    waybar rofi-wayland kitty networkmanager sudo grub efibootmgr os-prober \
-    pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
-    firefox discord steam obs-studio neovim bash egl-wayland thunar thunar-archive-plugin \
-    xarchiver zip unzip p7zip unrar \
-    python python-pip lua go nodejs npm typescript sqlite \
-    clang cmake ninja meson gdb lldb git tmux \
-    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
-    hyprpaper hyprlock fastfetch pavucontrol ddcutil btop \
-    ttf-jetbrains-mono-nerd ttf-firacode-nerd ttf-dejavu-nerd ttf-hack-nerd \
-    yazi zathura zathura-pdf-mupdf bluetui swaync \
-    noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
-    nerd-fonts-meta \
-    xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
-    adwaita-icon-theme gnome-themes-extra blueman \
-    polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
-    mesa vulkan-radeon amdvlk lib32-vulkan-radeon lib32-amdvlk xf86-video-amdgpu \
-    grim slurp wl-clipboard \
-    arandr wdisplays \
-    gtk3 kvantum qt5ct qt6ct lxappearance \
-    cliphist wl-clipboard xclip \
-    libreoffice-fresh imv glow wget
+# --- 12) INSTALAR PAQUETES CLAVE (por batches) ---
+print_message "Instalando drivers y paquetes base (esto tomará tiempo)..."
+pacman -S --noconfirm --needed nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils polkit
 
-# Añadir soporte para formatos multimedia
-pacman -S --noconfirm ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly
+print_message "Instalando entorno Wayland y Hyprland..."
+pacman -S --noconfirm --needed hyprland xorg-xwayland waybar
 
-# Instalar herramientas de monitoreo
-pacman -S --noconfirm nvtop btop
+print_message "Instalando utilidades básicas..."
+pacman -S --noconfirm --needed kitty networkmanager bluez bluez-utils
 
-# Configurar AUR
-print_message "Configurando acceso a AUR..."
-cd /tmp
-git clone https://aur.archlinux.org/paru.git
-chown -R antonio:antonio /tmp/paru
-cd paru
-sudo -u antonio makepkg -si --noconfirm
-print_success "Gestor AUR (paru) instalado"
+print_message "Instalando multimedia y soporte de audio..."
+pacman -S --noconfirm --needed pipewire pipewire-pulse pipewire-alsa wireplumber
 
-# Instalar paquetes desde AUR
-print_message "Instalando paquetes adicionales desde AUR..."
-sudo -u antonio paru -S --noconfirm visual-studio-code-bin nerd-fonts-jetbrains-mono
+print_message "Instalando fuentes y temas..."
+pacman -S --noconfirm --needed ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji ttf-dejavu
+
+print_message "Instalando herramientas y utilidades..."
+pacman -S --noconfirm --needed firefox thunar grim slurp wl-clipboard xclip zip unzip p7zip
+
+print_message "Instalando soporte para desarrollo..."
+pacman -S --noconfirm --needed git python python-pip
+
+print_message "Instalando herramientas de monitoreo..."
+pacman -S --noconfirm --needed btop
+
+print_message "Instalando controladores AMD..."
+pacman -S --noconfirm --needed mesa xf86-video-amdgpu vulkan-radeon
+
+print_message "Añadir soporte para formatos multimedia..."
+pacman -S --noconfirm --needed ffmpeg
+
 print_success "Paquetes clave instalados"
 
-# --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
+# --- 13) CONFIGURAR NVIDIA PARA WAYLAND ---
 print_message "Configurando NVIDIA para Wayland..."
+mkdir -p /etc/modprobe.d/
 echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm amdgpu /' /etc/mkinitcpio.conf
 mkinitcpio -P
 print_success "NVIDIA configurado para Wayland"
 
-# --- 15) CONFIGURAR GRUB PARA DUAL BOOT ---
+# --- 14) CONFIGURAR GRUB PARA DUAL BOOT ---
 print_message "Configurando GRUB para dual boot..."
 sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1"/' /etc/default/grub
 # Habilitar detección de otros sistemas operativos (Windows)
 sed -i 's/#GRUB_DISABLE_OS_PROBER=false/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
+
+print_message "Instalando GRUB..."
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ARCHLINUX
-os-prober
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado para dual boot"
 
-# --- 16) CREAR USUARIO ---
+# --- 15) CREAR USUARIO ---
 print_message "Creando usuario 'antonio'..."
-useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
+useradd -m -G wheel,video,audio,storage,optical -s /bin/bash antonio
 print_message "Configura la contraseña para el usuario 'antonio':"
 passwd antonio
-sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
+
+# Configurar sudo para el usuario antonio
+echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel
 print_success "Usuario creado"
 
-# --- 17) HABILITAR SERVICIOS ---
+# --- 16) HABILITAR SERVICIOS ---
 print_message "Habilitando servicios..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
-systemctl enable seatd
 systemctl enable fstrim.timer
 print_success "Servicios habilitados"
 
-# --- 18) CONFIGURAR HYPRLAND ---
+# --- 17) CONFIGURAR HYPRLAND ---
 print_message "Configurando Hyprland para el usuario..."
 mkdir -p /home/antonio/.config/hypr
 cat > /home/antonio/.config/hypr/hyprland.conf << EOF
@@ -276,9 +253,7 @@ env = QT_WAYLAND_DISABLE_WINDOWDECORATION,1
 env = MOZ_ENABLE_WAYLAND,1
 
 # Autostart
-exec-once = hyprpaper & waybar & swaync & /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
-exec-once = wl-paste --type text --watch cliphist store # Guardar texto copiado
-exec-once = wl-paste --type image --watch cliphist store # Guardar imágenes copiadas
+exec-once = waybar
 
 # Input
 input {
@@ -303,11 +278,6 @@ general {
 
 decoration {
     rounding = 10
-    blur {
-        enabled = true
-        size = 3
-        passes = 1
-    }
     drop_shadow = true
     shadow_range = 4
     shadow_render_power = 3
@@ -350,8 +320,6 @@ bind = $mainMod, C, killactive,
 bind = $mainMod, M, exit,
 bind = $mainMod, E, exec, thunar
 bind = $mainMod SHIFT, F, togglefloating,
-bind = $mainMod, R, exec, rofi -show drun
-bind = $mainMod, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy
 bind = $mainMod, P, pseudo,
 bind = $mainMod, F, fullscreen,
 bind = $mainMod, J, togglesplit,
@@ -395,13 +363,6 @@ bind = , XF86MonBrightnessUp, exec, brightnessctl set +5%
 bind = , XF86MonBrightnessDown, exec, brightnessctl set 5%-
 EOF
 
-# Configuración de hyprpaper
-mkdir -p /home/antonio/.config/hypr
-cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
-preload = /usr/share/backgrounds/archlinux/archlinux-simplyblack.png
-wallpaper = ,/usr/share/backgrounds/archlinux/archlinux-simplyblack.png
-EOF
-
 # Configuración de Waybar
 mkdir -p /home/antonio/.config/waybar
 cat > /home/antonio/.config/waybar/config << EOF
@@ -413,16 +374,16 @@ cat > /home/antonio/.config/waybar/config << EOF
     
     "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": ["clock"],
-    "modules-right": ["custom/gpu", "temperature#gpu", "custom/cpu", "temperature#cpu", "memory", "pulseaudio", "tray"],
+    "modules-right": ["tray", "pulseaudio", "network", "memory"],
     
     "hyprland/workspaces": {
         "format": "{name}: {icon}",
         "format-icons": {
-            "1": "",
-            "2": "",
-            "3": "",
-            "4": "",
-            "5": "",
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "5": "5",
             "urgent": "",
             "focused": "",
             "default": ""
@@ -442,85 +403,26 @@ cat > /home/antonio/.config/waybar/config << EOF
         "interval": 1
     },
     
-    "custom/cpu": {
-        "format": "CPU {}%",
-        "exec": "top -bn1 | grep 'Cpu(s)' | awk '{print int($2+$4)}'",
-        "interval": 2,
-        "tooltip": false,
-        "on-click": "kitty -e btop"
-    },
-    
-    "temperature#cpu": {
-        "critical-threshold": 80,
-        "format": "{temperatureC}°C",
-        "tooltip": true,
-        "hwmon-path": "/sys/class/hwmon/hwmon0/temp1_input",
-        "interval": 2
-    },
-    
-    "custom/gpu": {
-        "format": "GPU {}%",
-        "exec": "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits",
-        "interval": 2,
-        "tooltip": false,
-        "on-click": "kitty -e nvtop"
-    },
-    
-    "temperature#gpu": {
-        "critical-threshold": 85,
-        "format": "{temperatureC}°C",
-        "tooltip": true,
-        "hwmon-path": "/sys/class/hwmon/hwmon1/temp1_input",
-        "interval": 2
-    },
-    
     "memory": {
         "format": "{used:0.1f}GB/{total:0.1f}GB ",
         "interval": 2,
         "tooltip": true
     },
     
-    "backlight": {
-        "format": "{percent}% {icon}",
-        "format-icons": ["", "", "", "", "", "", "", "", ""]
-    },
-    
-    "battery": {
-        "states": {
-            "good": 95,
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "{capacity}% {icon}",
-        "format-charging": "{capacity}% ",
-        "format-plugged": "{capacity}% ",
-        "format-alt": "{time} {icon}",
-        "format-icons": ["", "", "", "", ""]
-    },
-    
     "network": {
-        "format-wifi": "{essid} ({signalStrength}%) ",
-        "format-ethernet": "{ipaddr}/{cidr} ",
-        "tooltip-format": "{ifname} via {gwaddr} ",
-        "format-linked": "{ifname} (No IP) ",
-        "format-disconnected": "Disconnected ⚠",
-        "format-alt": "{ifname}: {ipaddr}/{cidr}"
+        "format-wifi": "{essid}",
+        "format-ethernet": "{ipaddr}",
+        "tooltip-format": "{ifname} via {gwaddr}",
+        "format-linked": "{ifname} (No IP)",
+        "format-disconnected": "Disconnected",
+        "format-alt": "{ifname}: {ipaddr}"
     },
     
     "pulseaudio": {
-        "format": "{volume}% {icon}",
-        "format-bluetooth": "{volume}% {icon}",
-        "format-bluetooth-muted": " {icon}",
+        "format": "{volume}%",
+        "format-bluetooth": "{volume}%",
+        "format-bluetooth-muted": "",
         "format-muted": "",
-        "format-icons": {
-            "headphone": "",
-            "hands-free": "",
-            "headset": "",
-            "phone": "",
-            "portable": "",
-            "car": "",
-            "default": ["", "", ""]
-        },
         "on-click": "pavucontrol"
     },
     
@@ -536,7 +438,7 @@ cat > /home/antonio/.config/waybar/style.css << EOF
 * {
     border: none;
     border-radius: 0;
-    font-family: JetBrainsMono Nerd Font;
+    font-family: sans-serif;
     font-size: 13px;
     min-height: 0;
 }
@@ -545,8 +447,6 @@ window#waybar {
     background-color: rgba(0, 0, 0, 0.9);
     border-bottom: 3px solid rgba(100, 114, 125, 0.5);
     color: #ffffff;
-    transition-property: background-color;
-    transition-duration: .5s;
 }
 
 window#waybar.hidden {
@@ -557,18 +457,14 @@ window#waybar.hidden {
     padding: 0 5px;
     background-color: transparent;
     color: #ffffff;
-    border-bottom: 3px solid transparent;
 }
 
 #workspaces button:hover {
     background: rgba(0, 0, 0, 0.2);
-    box-shadow: inherit;
-    border-bottom: 3px solid #ffffff;
 }
 
 #workspaces button.focused {
     background-color: #64727D;
-    border-bottom: 3px solid #ffffff;
 }
 
 #workspaces button.urgent {
@@ -585,42 +481,12 @@ window#waybar.hidden {
     font-size: 14px;
 }
 
-#custom-cpu {
-    color: #4287f5;
-    font-weight: bold;
-    padding: 0 8px;
-}
-
-#temperature.cpu {
-    color: #4287f5;
-    padding-right: 16px;
-}
-
-#custom-gpu {
-    color: #43b1b1;
-    font-weight: bold;
-    padding: 0 8px;
-}
-
-#temperature.gpu {
-    color: #43b1b1;
-    padding-right: 16px;
-}
-
 #clock,
 #battery,
-#cpu,
-#memory,
-#temperature,
-#backlight,
 #network,
 #pulseaudio,
-#custom-media,
-#custom-cpu,
-#custom-gpu,
-#tray,
-#mode,
-#idle_inhibitor {
+#memory,
+#tray {
     padding: 0 10px;
     margin: 0 4px;
     color: #ffffff;
@@ -629,72 +495,6 @@ window#waybar.hidden {
 #memory {
     padding-right: 16px;
 }
-
-#battery.charging {
-    color: #26A65B;
-}
-
-#battery.warning:not(.charging) {
-    background-color: #f53c3c;
-    color: #ffffff;
-}
-
-#temperature.critical {
-    background-color: #eb4d4b;
-}
-
-#tray {
-    background-color: #2980b9;
-}
-EOF
-
-# Configurar tema oscuro para GTK y QT
-mkdir -p /home/antonio/.config/gtk-3.0
-cat > /home/antonio/.config/gtk-3.0/settings.ini << EOF
-[Settings]
-gtk-application-prefer-dark-theme=1
-gtk-theme-name=Adwaita-dark
-gtk-icon-theme-name=Adwaita
-gtk-font-name=Sans 10
-gtk-cursor-theme-name=Adwaita
-gtk-cursor-theme-size=0
-gtk-toolbar-style=GTK_TOOLBAR_BOTH
-gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
-gtk-button-images=1
-gtk-menu-images=1
-gtk-enable-event-sounds=1
-gtk-enable-input-feedback-sounds=1
-gtk-xft-antialias=1
-gtk-xft-hinting=1
-gtk-xft-hintstyle=hintfull
-EOF
-
-mkdir -p /home/antonio/.config/qt5ct
-cat > /home/antonio/.config/qt5ct/qt5ct.conf << EOF
-[Appearance]
-color_scheme_path=/usr/share/qt5ct/colors/darker.conf
-custom_palette=false
-icon_theme=Adwaita
-standard_dialogs=default
-style=Fusion
-
-[Fonts]
-fixed=@Variant(\0\0\0@\0\0\0\x12\0M\0o\0n\0o\0s\0p\0\x61\0\x63\0\x65@$\0\0\0\0\0\0\xff\xff\xff\xff\x5\x1\0\x32\x10)
-general=@Variant(\0\0\0@\0\0\0\x14\0S\0\x61\0n\0s\0 \0S\0\x65\0r\0i\0\x66@$\0\0\0\0\0\0\xff\xff\xff\xff\x5\x1\0\x32\x10)
-EOF
-
-mkdir -p /home/antonio/.config/qt6ct
-cat > /home/antonio/.config/qt6ct/qt6ct.conf << EOF
-[Appearance]
-color_scheme_path=/usr/share/qt6ct/colors/darker.conf
-custom_palette=false
-icon_theme=Adwaita
-standard_dialogs=default
-style=Fusion
-
-[Fonts]
-fixed=@Variant(\0\0\0@\0\0\0\x12\0M\0o\0n\0o\0s\0p\0\x61\0\x63\0\x65@$\0\0\0\0\0\0\xff\xff\xff\xff\x5\x1\0\x32\x10)
-general=@Variant(\0\0\0@\0\0\0\x14\0S\0\x61\0n\0s\0 \0S\0\x65\0r\0i\0\x66@$\0\0\0\0\0\0\xff\xff\xff\xff\x5\x1\0\x32\x10)
 EOF
 
 # Crear archivo de perfil para variables de entorno para Wayland
@@ -703,7 +503,6 @@ cat > /home/antonio/.profile << EOF
 export XDG_CURRENT_DESKTOP=Hyprland
 export XDG_SESSION_TYPE=wayland
 export QT_QPA_PLATFORM=wayland
-export QT_QPA_PLATFORMTHEME=qt5ct
 export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
 export MOZ_ENABLE_WAYLAND=1
 export GBM_BACKEND=nvidia-drm
@@ -712,42 +511,12 @@ export WLR_NO_HARDWARE_CURSORS=1
 export LIBVA_DRIVER_NAME=nvidia
 export EDITOR=nano
 
-# Variables para aplicaciones específicas
-export _JAVA_AWT_WM_NONREPARENTING=1
-export XCURSOR_SIZE=24
-export XCURSOR_THEME=Adwaita
-
-# Variables específicas para VSCode en Wayland
-export ELECTRON_OZONE_PLATFORM_HINT=wayland
-
 # Directorio de imágenes para capturas de pantalla
 mkdir -p ~/Imágenes
 EOF
 
-# Añadir una nota para la configuración de los sensores
-cat > /home/antonio/.config/waybar/SENSOR_CONFIG.txt << EOF
-IMPORTANTE: Las rutas de los sensores de temperatura en la configuración de Waybar podrían necesitar ajustes.
-
-Si los indicadores de temperatura no muestran datos correctos, sigue estos pasos:
-
-1. Ejecuta el siguiente comando para listar los sensores disponibles:
-   $ ls -l /sys/class/hwmon/*/temp*_input
-
-2. Identifica qué rutas corresponden a tu CPU y GPU.
-
-3. Modifica los valores de "hwmon-path" en ~/.config/waybar/config para que coincidan con las rutas correctas.
-
-Ejemplo de modificación:
-"hwmon-path": "/sys/class/hwmon/hwmon4/temp1_input" (para CPU)
-"hwmon-path": "/sys/class/hwmon/hwmon2/temp1_input" (para GPU)
-
-También puedes usar "thermal-zone" en lugar de "hwmon-path" si es más confiable para tu hardware:
-"thermal-zone": 0 (el número puede variar según tu sistema)
-EOF
-
 # Ajustar permisos
-chown -R antonio:antonio /home/antonio/.config
-chown -R antonio:antonio /home/antonio/.profile
+chown -R antonio:antonio /home/antonio/
 chmod +x /home/antonio/.profile
 
 # Crear directorio para capturas de pantalla
@@ -759,13 +528,14 @@ print_message "Después de reiniciar:"
 print_message "1. Retira el medio de instalación"
 print_message "2. Selecciona Arch Linux en GRUB"
 print_message "3. Inicia sesión como 'antonio'"
-print_message "4. Conecta a Internet con 'nmtui'"
-print_message "5. Para gestionar monitores, usa wdisplays o arandr"
-print_message "6. Alt+Shift para cambiar entre teclado US y ES"
-print_message "7. Super+Z para capturar pantalla (seleccionando zona)"
-print_message "8. Super+V para acceder al historial del portapapeles"
-print_message "9. Para instalar VSCode y otros programas, ya está disponible 'paru'"
-print_warning "10. Es posible que necesites ajustar las rutas de los sensores (ver ~/.config/waybar/SENSOR_CONFIG.txt)"
+print_message "4. Ejecuta 'EDITOR=nano sudo visudo' y asegúrate que la línea %wheel ALL=(ALL) ALL esté descomentada"
+print_message "5. Conecta a Internet con 'nmtui'"
+print_message "6. Para instalar paquetes adicionales, ejecuta: sudo pacman -Syu"
+print_message "7. Alt+Shift para cambiar entre teclado US y ES"
+print_message "8. Super+Z para capturar pantalla (seleccionando zona)"
+
+# Esto ayudará a mantener organizado el script
+sleep 2
 EOL
 
 # Hacer ejecutable el script post-chroot
