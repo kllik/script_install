@@ -89,7 +89,7 @@ print_success "Subvolúmenes BTRFS montados"
 
 # --- 5) INSTALAR SISTEMA BASE ---
 print_message "Instalando sistema base (esto puede tomar tiempo)..."
-pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs nano grub efibootmgr sudo networkmanager
+pacstrap /mnt base base-devel linux linux-headers linux-firmware btrfs-progs nano grub efibootmgr sudo networkmanager amd-ucode
 print_success "Sistema base instalado"
 
 # --- 6) GENERAR FSTAB ---
@@ -139,7 +139,7 @@ echo "LANG=es_ES.UTF-8" > /etc/locale.conf
 echo "KEYMAP=us" > /etc/vconsole.conf
 mkdir -p /etc/X11/xorg.conf.d
 
-ln -sf /usr/share/zoneinfo/Europe/Madrid /etc/localtime
+ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 hwclock --systohc
 print_success "Locale, zona horaria y teclado configurados"
 
@@ -163,18 +163,95 @@ sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Repositorio multilib habilitado"
 
-# --- 12) INSTALAR PAQUETES CLAVE (por batches) ---
-print_message "Instalando drivers y paquetes base (esto tomará tiempo)..."
-pacman -S --noconfirm --needed nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils polkit
+# --- 12) INSTALAR PAQUETES DE NVIDIA PRIMERO ---
+print_message "Instalando drivers NVIDIA..."
+pacman -S --noconfirm --needed nvidia nvidia-utils nvidia-dkms nvidia-settings lib32-nvidia-utils
 
+print_message "Creando configuración de modulos para mkinitcpio..."
+mkdir -p /etc/modprobe.d/
+cat > /etc/modprobe.d/nvidia.conf << EOF
+options nvidia-drm modeset=1
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+EOF
+
+cat > /etc/modprobe.d/nvidia-power-management.conf << EOF
+options nvidia NVreg_DynamicPowerManagement=0x02
+EOF
+
+# Configuración específica de mkinitcpio para cargar módulos NVIDIA
+cat > /etc/mkinitcpio.conf << EOF
+# vim:set ft=sh
+# The following modules are loaded before any boot hooks are
+# run.  Advanced users may wish to specify all system modules
+# in this array.  For instance:
+#     MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)
+MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)
+
+# BINARIES
+# This setting includes any additional binaries a given user may
+# wish into the CPIO image.  This is run last, so it may be used to
+# override the actual binaries included by a given hook
+# BINARIES are dependency parsed, so you may safely ignore libraries
+BINARIES=()
+
+# FILES
+# This setting is similar to BINARIES above, however, files are added
+# as-is and are not parsed in any way.  This is useful for config files.
+FILES=()
+
+# HOOKS
+# This is the most important setting in this file.  The HOOKS control the
+# modules and scripts added to the image, and what happens at boot time.
+# Order is important, and it is recommended that you do not change the
+# order in which HOOKS are added.  Run 'mkinitcpio -H <hook name>' for
+# help on a given hook.
+# 'base' is _required_ unless you know precisely what you are doing.
+# 'udev' is _required_ in order to automatically load modules
+# 'filesystems' is _required_ unless you specify your fs modules in MODULES
+# Examples:
+#    This setup specifies all modules in the MODULES setting above.
+#    No RAID, lvm2, or encrypted root is needed.
+#    HOOKS=(base)
+#
+#    This setup will autodetect all modules for your system and should
+#    work as a sane default
+#    HOOKS=(base udev autodetect modconf block filesystems fsck)
+HOOKS=(base udev autodetect modconf block filesystems keyboard fsck)
+
+# COMPRESSION
+# Use this to compress the initramfs image. By default, gzip compression
+# is used. Use 'cat' to create an uncompressed image.
+COMPRESSION="zstd"
+#COMPRESSION="gzip"
+#COMPRESSION="bzip2"
+#COMPRESSION="lzma"
+#COMPRESSION="xz"
+#COMPRESSION="lzop"
+#COMPRESSION="lz4"
+
+# COMPRESSION_OPTIONS
+# Additional options for the compressor
+#COMPRESSION_OPTIONS=()
+
+# MODULES_DECOMPRESS
+# Decompress kernel modules during initramfs creation.
+# Enable to speedup boot process, disable to save RAM
+# during early userspace. Switch (yes/no).
+MODULES_DECOMPRESS="yes"
+EOF
+
+mkinitcpio -P
+print_success "Configuración NVIDIA completada"
+
+# --- 13) INSTALACIÓN DE DEMÁS PAQUETES ---
 print_message "Instalando entorno Wayland y Hyprland..."
 pacman -S --noconfirm --needed hyprland xorg-xwayland waybar
 
 print_message "Instalando utilidades básicas..."
-pacman -S --noconfirm --needed kitty rofi networkmanager bluez bluez-utils
+pacman -S --noconfirm --needed kitty rofi networkmanager bluez bluez-utils polkit-gnome
 
 print_message "Instalando multimedia y soporte de audio..."
-pacman -S --noconfirm --needed pipewire pipewire-pulse pipewire-alsa wireplumber
+pacman -S --noconfirm --needed pipewire pipewire-pulse pipewire-alsa wireplumber pavucontrol
 
 print_message "Instalando fuentes y temas..."
 pacman -S --noconfirm --needed ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji ttf-dejavu
@@ -182,27 +259,41 @@ pacman -S --noconfirm --needed ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emo
 print_message "Instalando herramientas y utilidades..."
 pacman -S --noconfirm --needed firefox thunar grim slurp wl-clipboard xclip zip unzip p7zip
 
-print_message "Instalando soporte para desarrollo..."
-pacman -S --noconfirm --needed git python python-pip
-
-print_message "Instalando herramientas de monitoreo..."
-pacman -S --noconfirm --needed btop
-
 print_message "Instalando controladores AMD..."
 pacman -S --noconfirm --needed mesa xf86-video-amdgpu vulkan-radeon
 
 print_message "Añadir soporte para formatos multimedia..."
 pacman -S --noconfirm --needed ffmpeg
 
-print_success "Paquetes clave instalados"
+# --- INSTALACIÓN DE HERRAMIENTAS DE DESARROLLO ---
+print_message "Instalando herramientas para C/C++..."
+pacman -S --noconfirm --needed gcc g++ cmake clang llvm lldb gdb make valgrind boost boost-libs
 
-# --- 13) CONFIGURAR NVIDIA PARA WAYLAND ---
-print_message "Configurando NVIDIA para Wayland..."
-mkdir -p /etc/modprobe.d/
-echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
-sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm amdgpu /' /etc/mkinitcpio.conf
-mkinitcpio -P
-print_success "NVIDIA configurado para Wayland"
+print_message "Instalando herramientas para Lua..."
+pacman -S --noconfirm --needed lua luarocks lua-lgi
+
+print_message "Instalando herramientas para JavaScript/TypeScript..."
+pacman -S --noconfirm --needed nodejs npm typescript yarn deno
+
+print_message "Instalando herramientas para SQLite..."
+pacman -S --noconfirm --needed sqlite sqlitebrowser sqlite-doc
+
+print_message "Instalando herramientas para Python..."
+pacman -S --noconfirm --needed python python-pip python-setuptools python-virtualenv
+
+print_message "Instalando herramientas para Git..."
+pacman -S --noconfirm --needed git git-lfs
+
+print_message "Instalando herramientas de documentación y desarrollo..."
+pacman -S --noconfirm --needed doxygen graphviz ctags
+
+print_message "Instalando IDEs y editores adicionales..."
+pacman -S --noconfirm --needed neovim code geany
+
+print_message "Instalando bibliotecas para desarrollo GUI..."
+pacman -S --noconfirm --needed qt5-base qt6-base gtk3 gtk4 wxgtk3 sdl2 glfw-wayland
+
+print_success "Herramientas de desarrollo instaladas"
 
 # --- 14) CONFIGURAR GRUB PARA DUAL BOOT ---
 print_message "Configurando GRUB para dual boot..."
@@ -212,6 +303,7 @@ sed -i 's/#GRUB_DISABLE_OS_PROBER=false/GRUB_DISABLE_OS_PROBER=false/' /etc/defa
 
 print_message "Instalando GRUB..."
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ARCHLINUX
+os-prober
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado para dual boot"
 
@@ -255,6 +347,7 @@ env = MOZ_ENABLE_WAYLAND,1
 # Autostart
 exec-once = waybar &
 exec-once = sleep 2 && waybar # Intento de inicio de waybar con retraso como respaldo
+exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 
 # Input
 input {
@@ -323,50 +416,49 @@ windowrule = float, ^(pavucontrol)$
 windowrule = float, ^(blueman-manager)$
 windowrule = float, ^(nm-connection-editor)$
 
-# Atajos de teclado - Definición del modificador principal
-$mainMod = SUPER
-
-# Aplicaciones y controles de ventana
-bind = $mainMod, Q, exec, kitty
-bind = $mainMod, C, killactive, 
-bind = $mainMod, M, exit, 
-bind = $mainMod, E, exec, thunar
-bind = $mainMod SHIFT, F, togglefloating, 
-bind = $mainMod, R, exec, rofi -show drun
-bind = $mainMod, P, pseudo, 
-bind = $mainMod, F, fullscreen, 
-bind = $mainMod, J, togglesplit, 
-bind = $mainMod, Z, exec, grim -g "$(slurp)" ~/Imágenes/$(date +%Y-%m-%d_%H-%M-%S).png
+# Atajos de teclado - usando SUPER directamente
+bind = SUPER, Q, exec, kitty
+bind = SUPER, C, killactive, 
+bind = SUPER, M, exit, 
+bind = SUPER, E, exec, thunar
+bind = SUPER SHIFT, F, togglefloating, 
+bind = SUPER, R, exec, rofi -show drun
+bind = SUPER, P, pseudo, 
+bind = SUPER, F, fullscreen, 
+bind = SUPER, J, togglesplit, 
+bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/$(date +%Y-%m-%d_%H-%M-%S).png
+bind = SUPER, V, exec, code    # Abrir Visual Studio Code
+bind = SUPER, N, exec, neovim  # Abrir Neovim
 
 # Movimiento entre ventanas
-bind = $mainMod, left, movefocus, l
-bind = $mainMod, right, movefocus, r
-bind = $mainMod, up, movefocus, u
-bind = $mainMod, down, movefocus, d
+bind = SUPER, left, movefocus, l
+bind = SUPER, right, movefocus, r
+bind = SUPER, up, movefocus, u
+bind = SUPER, down, movefocus, d
 
 # Cambio de espacios de trabajo
-bind = $mainMod, 1, workspace, 1
-bind = $mainMod, 2, workspace, 2
-bind = $mainMod, 3, workspace, 3
-bind = $mainMod, 4, workspace, 4
-bind = $mainMod, 5, workspace, 5
-bind = $mainMod, 6, workspace, 6
-bind = $mainMod, 7, workspace, 7
-bind = $mainMod, 8, workspace, 8
-bind = $mainMod, 9, workspace, 9
-bind = $mainMod, 0, workspace, 10
+bind = SUPER, 1, workspace, 1
+bind = SUPER, 2, workspace, 2
+bind = SUPER, 3, workspace, 3
+bind = SUPER, 4, workspace, 4
+bind = SUPER, 5, workspace, 5
+bind = SUPER, 6, workspace, 6
+bind = SUPER, 7, workspace, 7
+bind = SUPER, 8, workspace, 8
+bind = SUPER, 9, workspace, 9
+bind = SUPER, 0, workspace, 10
 
 # Mover ventana al espacio de trabajo
-bind = $mainMod SHIFT, 1, movetoworkspace, 1
-bind = $mainMod SHIFT, 2, movetoworkspace, 2
-bind = $mainMod SHIFT, 3, movetoworkspace, 3
-bind = $mainMod SHIFT, 4, movetoworkspace, 4
-bind = $mainMod SHIFT, 5, movetoworkspace, 5
-bind = $mainMod SHIFT, 6, movetoworkspace, 6
-bind = $mainMod SHIFT, 7, movetoworkspace, 7
-bind = $mainMod SHIFT, 8, movetoworkspace, 8
-bind = $mainMod SHIFT, 9, movetoworkspace, 9
-bind = $mainMod SHIFT, 0, movetoworkspace, 10
+bind = SUPER SHIFT, 1, movetoworkspace, 1
+bind = SUPER SHIFT, 2, movetoworkspace, 2
+bind = SUPER SHIFT, 3, movetoworkspace, 3
+bind = SUPER SHIFT, 4, movetoworkspace, 4
+bind = SUPER SHIFT, 5, movetoworkspace, 5
+bind = SUPER SHIFT, 6, movetoworkspace, 6
+bind = SUPER SHIFT, 7, movetoworkspace, 7
+bind = SUPER SHIFT, 8, movetoworkspace, 8
+bind = SUPER SHIFT, 9, movetoworkspace, 9
+bind = SUPER SHIFT, 0, movetoworkspace, 10
 
 # Control de volumen y brillo
 bind = , XF86AudioRaiseVolume, exec, pactl set-sink-volume @DEFAULT_SINK@ +5%
@@ -387,7 +479,7 @@ cat > /home/antonio/.config/waybar/config << EOF
     
     "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "pulseaudio", "network", "memory"],
+    "modules-right": ["custom/gpu", "temperature#gpu", "custom/cpu", "temperature#cpu", "memory", "pulseaudio", "tray"],
     
     "hyprland/workspaces": {
         "format": "{name}: {icon}",
@@ -416,19 +508,42 @@ cat > /home/antonio/.config/waybar/config << EOF
         "interval": 1
     },
     
+    "custom/cpu": {
+        "format": "CPU {}%",
+        "exec": "top -bn1 | grep 'Cpu(s)' | awk '{print int($2+$4)}'",
+        "interval": 2,
+        "tooltip": false,
+        "on-click": "kitty -e btop"
+    },
+    
+    "temperature#cpu": {
+        "critical-threshold": 80,
+        "format": "{temperatureC}°C",
+        "tooltip": true,
+        "hwmon-path": "/sys/class/hwmon/hwmon0/temp1_input",
+        "interval": 2
+    },
+    
+    "custom/gpu": {
+        "format": "GPU {}%",
+        "exec": "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits",
+        "interval": 2,
+        "tooltip": false,
+        "on-click": "kitty -e nvtop"
+    },
+    
+    "temperature#gpu": {
+        "critical-threshold": 85,
+        "format": "{temperatureC}°C",
+        "tooltip": true,
+        "hwmon-path": "/sys/class/hwmon/hwmon1/temp1_input",
+        "interval": 2
+    },
+    
     "memory": {
         "format": "{used:0.1f}GB/{total:0.1f}GB ",
         "interval": 2,
         "tooltip": true
-    },
-    
-    "network": {
-        "format-wifi": "{essid}",
-        "format-ethernet": "{ipaddr}",
-        "tooltip-format": "{ifname} via {gwaddr}",
-        "format-linked": "{ifname} (No IP)",
-        "format-disconnected": "Disconnected",
-        "format-alt": "{ifname}: {ipaddr}"
     },
     
     "pulseaudio": {
@@ -494,12 +609,36 @@ window#waybar.hidden {
     font-size: 14px;
 }
 
+#custom-cpu {
+    color: #4287f5;
+    font-weight: bold;
+    padding: 0 8px;
+}
+
+#temperature.cpu {
+    color: #4287f5;
+    padding-right: 16px;
+}
+
+#custom-gpu {
+    color: #43b1b1;
+    font-weight: bold;
+    padding: 0 8px;
+}
+
+#temperature.gpu {
+    color: #43b1b1;
+    padding-right: 16px;
+}
+
 #clock,
 #battery,
 #network,
 #pulseaudio,
 #memory,
-#tray {
+#tray,
+#custom-cpu,
+#custom-gpu {
     padding: 0 10px;
     margin: 0 4px;
     color: #ffffff;
@@ -535,8 +674,205 @@ export WLR_NO_HARDWARE_CURSORS=1
 export LIBVA_DRIVER_NAME=nvidia
 export EDITOR=nano
 
+# Variables para desarrollo
+export PATH="$HOME/.local/bin:$PATH"
+export CC=gcc
+export CXX=g++
+export CMAKE_GENERATOR=Ninja
+export NODE_PATH="$HOME/.npm-packages/lib/node_modules"
+
+# Carga de módulos NVIDIA
+if ! lsmod | grep -q nvidia; then
+    sudo modprobe nvidia
+    sudo modprobe nvidia_modeset
+    sudo modprobe nvidia_uvm
+    sudo modprobe nvidia_drm
+fi
+
 # Directorio de imágenes para capturas de pantalla
 mkdir -p ~/Imágenes
+EOF
+
+# Añadir script de post-boot para asegurar que los módulos NVIDIA estén cargados
+cat > /etc/systemd/system/nvidia-modules.service << EOF
+[Unit]
+Description=Load NVIDIA modules at boot time
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/modprobe nvidia
+ExecStart=/usr/bin/modprobe nvidia_modeset
+ExecStart=/usr/bin/modprobe nvidia_uvm
+ExecStart=/usr/bin/modprobe nvidia_drm
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable nvidia-modules.service
+
+# Configuración básica para algunos entornos de desarrollo
+mkdir -p /home/antonio/.config/nvim
+cat > /home/antonio/.config/nvim/init.vim << EOF
+" Configuración básica para neovim
+syntax on
+set number
+set tabstop=4
+set shiftwidth=4
+set expandtab
+set smartindent
+set autoindent
+set ruler
+set showcmd
+set incsearch
+set hlsearch
+set ignorecase
+set smartcase
+set termguicolors
+
+" Detección de tipo de archivo
+filetype plugin on
+filetype indent on
+EOF
+
+# Añadir configuración básica de C++
+mkdir -p /home/antonio/dev/cpp
+cat > /home/antonio/dev/cpp/CMakeLists.txt.template << EOF
+cmake_minimum_required(VERSION 3.15)
+project(MiProyecto CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Añadir opciones de compilación
+add_compile_options(
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Werror
+)
+
+# Añadir ejecutable
+add_executable(app main.cpp)
+
+# Opcional: Enlazar con bibliotecas
+# target_link_libraries(app PRIVATE biblioteca)
+EOF
+
+cat > /home/antonio/dev/cpp/main.cpp.template << EOF
+#include <iostream>
+#include <vector>
+#include <string>
+
+int main() {
+    std::cout << "¡Hola mundo desde C++17!" << std::endl;
+    return 0;
+}
+EOF
+
+# Configuración básica SQLite
+mkdir -p /home/antonio/dev/db
+cat > /home/antonio/dev/db/ejemplo.sql << EOF
+-- Ejemplo básico de SQLite
+CREATE TABLE usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    email TEXT UNIQUE,
+    fecha_registro DATE DEFAULT CURRENT_DATE
+);
+
+-- Insertar algunos datos de prueba
+INSERT INTO usuarios (nombre, email) VALUES 
+    ('Usuario1', 'usuario1@ejemplo.com'),
+    ('Usuario2', 'usuario2@ejemplo.com');
+
+-- Consulta simple
+SELECT * FROM usuarios;
+EOF
+
+# Configuración básica JavaScript/TypeScript
+mkdir -p /home/antonio/dev/js
+cat > /home/antonio/dev/js/tsconfig.json << EOF
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+EOF
+
+mkdir -p /home/antonio/dev/js/src
+cat > /home/antonio/dev/js/src/app.ts << EOF
+// Ejemplo básico de TypeScript
+interface Usuario {
+    id: number;
+    nombre: string;
+    email: string;
+}
+
+class GestorUsuarios {
+    private usuarios: Usuario[] = [];
+
+    agregarUsuario(usuario: Usuario): void {
+        this.usuarios.push(usuario);
+        console.log(`Usuario ${usuario.nombre} agregado con éxito.`);
+    }
+
+    listarUsuarios(): void {
+        console.log('Lista de usuarios:');
+        this.usuarios.forEach(usuario => {
+            console.log(`- ${usuario.nombre} (${usuario.email})`);
+        });
+    }
+}
+
+// Uso de ejemplo
+const gestor = new GestorUsuarios();
+gestor.agregarUsuario({ id: 1, nombre: 'Usuario1', email: 'usuario1@ejemplo.com' });
+gestor.agregarUsuario({ id: 2, nombre: 'Usuario2', email: 'usuario2@ejemplo.com' });
+gestor.listarUsuarios();
+
+export { Usuario, GestorUsuarios };
+EOF
+
+# Configuración básica Lua
+mkdir -p /home/antonio/dev/lua
+cat > /home/antonio/dev/lua/ejemplo.lua << EOF
+-- Ejemplo básico de Lua
+local function saludar(nombre)
+    return "Hola, " .. nombre .. "!"
+end
+
+local function main()
+    local mensaje = saludar("Mundo")
+    print(mensaje)
+    
+    -- Tabla (similar a objetos/diccionarios)
+    local persona = {
+        nombre = "Antonio",
+        edad = 30,
+        hobbies = {"programación", "lectura", "música"}
+    }
+    
+    print("Nombre:", persona.nombre)
+    print("Hobbies:")
+    for i, hobby in ipairs(persona.hobbies) do
+        print(i, hobby)
+    end
+end
+
+main()
 EOF
 
 # Ajustar permisos
@@ -556,8 +892,11 @@ print_message "4. Ejecuta 'EDITOR=nano sudo visudo' y asegúrate que la línea %
 print_message "5. Conecta a Internet con 'nmtui'"
 print_message "6. Para instalar paquetes adicionales, ejecuta: sudo pacman -Syu"
 print_message "7. Alt+Shift para cambiar entre teclado US y ES"
-print_message "8. Super+Z para capturar pantalla (seleccionando zona)"
-print_message "9. Super+R para abrir el lanzador de aplicaciones rofi"
+print_message "8. SUPER+Z para capturar pantalla (seleccionando zona)"
+print_message "9. SUPER+R para abrir el lanzador de aplicaciones rofi"
+print_message "10. SUPER+V para abrir Visual Studio Code"
+print_message "11. Encontrarás plantillas para desarrollo en ~/dev/"
+print_message "12. Si persisten problemas con NVIDIA, ejecuta 'dkms autoinstall' como root"
 
 # Esto ayudará a mantener organizado el script
 sleep 2
