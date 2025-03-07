@@ -89,7 +89,9 @@ print_success "Subvolúmenes BTRFS montados"
 
 # --- 5) INSTALAR SISTEMA BASE ---
 print_message "Instalando sistema base (esto puede tomar tiempo)..."
-pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs
+# Aseguramos que tenemos una lista actualizada de mirrors
+pacman -Sy --noconfirm archlinux-keyring
+pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs nano vim sudo wget
 print_success "Sistema base instalado"
 
 # --- 6) GENERAR FSTAB ---
@@ -123,11 +125,6 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# --- 8) INSTALAR NANO ---
-print_message "Instalando nano..."
-pacman -Sy nano --noconfirm
-print_success "Nano instalado"
-
 # --- 9) CONFIGURAR LOCALE Y ZONA HORARIA ---
 print_message "Configurando locale y zona horaria..."
 sed -i 's/#es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
@@ -158,85 +155,34 @@ sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Repositorio multilib habilitado"
 
-# --- 13) INSTALAR PAQUETES CLAVE ---
-print_message "Instalando paquetes clave (esto tomará tiempo)..."
-pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
-    hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    waybar rofi kitty networkmanager sudo grub efibootmgr \
-    pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
-    firefox discord steam obs-studio neovim bash egl-wayland thunar \
-    python python-pip lua go nodejs npm typescript sqlite \
-    clang cmake ninja meson gdb lldb git tmux \
-    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
-    hyprpaper hyprshot fastfetch pavucontrol ddcutil btop \
-    ttf-jetbrains-mono-nerd \
-    yazi zathura zathura-pdf-mupdf bluetui swaync \
-    noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
-    xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
-    adwaita-icon-theme gnome-themes-extra blueman \
-    polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
-    grim slurp wl-clipboard network-manager-applet \
-    libreoffice-fresh imv glow wget \
-    timeshift unzip qt5ct kvantum kvantum-theme-arc gtk-engine-murrine gtk3 gtk4 \
-    gvfs udisks2 thunar-archive-plugin \
-    papirus-icon-theme materia-gtk-theme
+# --- 13) INSTALAR PAQUETES BÁSICOS PRIMERO ---
+print_message "Instalando paquetes básicos primero..."
+# Instalamos primero grub y los paquetes de red
+pacman -S --noconfirm grub efibootmgr networkmanager wpa_supplicant bluez bluez-utils
+# Habilitamos los servicios básicos
+systemctl enable NetworkManager
+systemctl enable bluetooth
+systemctl enable fstrim.timer
+print_success "Paquetes básicos instalados y servicios habilitados"
 
-print_success "Paquetes clave instalados"
+# --- 14) INSTALAR CONTROLADORES NVIDIA ---
+print_message "Instalando controladores NVIDIA..."
+pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils
+print_success "Controladores NVIDIA instalados"
 
-# --- 14) CONFIGURAR FUENTE PREDETERMINADA DEL SISTEMA ---
-print_message "Configurando JetBrains Mono como fuente predeterminada..."
-mkdir -p /etc/fonts/conf.d/
-cat > /etc/fonts/local.conf << EOF
-<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <alias>
-    <family>sans-serif</family>
-    <prefer>
-      <family>JetBrains Mono Nerd Font</family>
-    </prefer>
-  </alias>
-  <alias>
-    <family>serif</family>
-    <prefer>
-      <family>JetBrains Mono Nerd Font</family>
-    </prefer>
-  </alias>
-  <alias>
-    <family>monospace</family>
-    <prefer>
-      <family>JetBrains Mono Nerd Font</family>
-    </prefer>
-  </alias>
-</fontconfig>
-EOF
-fc-cache -f
-print_success "Fuente JetBrains Mono configurada como predeterminada"
-
-# --- 15) CONFIGURAR NVIDIA PARA WAYLAND ---
-print_message "Configurando NVIDIA para Wayland..."
+# --- 15) CONFIGURAR MKINITCPIO ---
+print_message "Configurando mkinitcpio para NVIDIA..."
+# Creamos la configuración para NVIDIA
 echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
 echo "options nvidia NVreg_PreserveVideoMemoryAllocations=1" >> /etc/modprobe.d/nvidia.conf
 echo "options nvidia NVreg_RegistryDwords=\"PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x1\"" >> /etc/modprobe.d/nvidia.conf
-echo "options nvidia-drm modeset=1" > /etc/modprobe.d/nvidia-drm.conf
 
-# Optimizaciones adicionales para NVIDIA en Wayland
-cat > /etc/profile.d/nvidia-wayland.sh << EOF
-#!/bin/bash
-# Optimizaciones para NVIDIA en Wayland
-export LIBVA_DRIVER_NAME=nvidia
-export __GLX_VENDOR_LIBRARY_NAME=nvidia
-export GBM_BACKEND=nvidia-drm
-export __GL_GSYNC_ALLOWED=1
-export __GL_VRR_ALLOWED=1
-export NVD_BACKEND=direct
-export WLR_NO_HARDWARE_CURSORS=1
-EOF
-chmod +x /etc/profile.d/nvidia-wayland.sh
-
+# Modificamos mkinitcpio.conf para incluir los módulos de NVIDIA
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
+
+# Regeneramos la imagen de initramfs
 mkinitcpio -P
-print_success "NVIDIA configurado para Wayland"
+print_success "mkinitcpio configurado para NVIDIA"
 
 # --- 16) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
@@ -251,26 +197,44 @@ useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
 print_message "Configura la contraseña para el usuario 'antonio':"
 passwd antonio
 
-# Configurar sudoers usando EDITOR y visudo
+# Configurar sudoers para el grupo wheel
 print_message "Configurando privilegios sudo para el usuario 'antonio'..."
-EDITOR=nano visudo -f /etc/sudoers.d/antonio
-echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/antonio
-chmod 440 /etc/sudoers.d/antonio
+echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
+chmod 440 /etc/sudoers.d/wheel
 print_success "Usuario creado con privilegios sudo"
 
-# --- 18) HABILITAR SERVICIOS ---
-print_message "Habilitando servicios..."
-systemctl enable NetworkManager
-systemctl enable bluetooth
-systemctl enable seatd
-systemctl enable fstrim.timer
-print_success "Servicios habilitados"
+# --- 18) INSTALAR PAQUETES DE ENTORNO DE ESCRITORIO ---
+print_message "Instalando paquetes de entorno de escritorio (esto tomará tiempo)..."
+pacman -S --noconfirm \
+    xorg-server xorg-xwayland \
+    pipewire pipewire-pulse pipewire-alsa wireplumber \
+    hyprland waybar rofi kitty \
+    hyprpaper hyprshot \
+    grim slurp wl-clipboard \
+    thunar thunar-archive-plugin file-roller gvfs udisks2 \
+    ttf-jetbrains-mono-nerd ttf-dejavu ttf-liberation noto-fonts noto-fonts-emoji \
+    firefox \
+    polkit polkit-gnome xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
+    brightnessctl network-manager-applet \
+    qt5ct qt5-wayland qt6-wayland kvantum \
+    papirus-icon-theme materia-gtk-theme \
+    timeshift unzip \
+    discord steam obs-studio neovim bash egl-wayland \
+    python python-pip lua go nodejs npm typescript sqlite \
+    clang cmake ninja meson gdb lldb git tmux \
+    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
+    fastfetch pavucontrol ddcutil btop \
+    yazi zathura zathura-pdf-mupdf bluetui swaync \
+    adwaita-icon-theme gnome-themes-extra blueman \
+    libreoffice-fresh imv glow
+
+print_success "Paquetes de entorno de escritorio instalados"
 
 # --- 19) CONFIGURAR TEMA OSCURO Y QT5CT ---
 print_message "Configurando tema oscuro para GTK y Qt..."
 
 # Configuración global de GTK para modo oscuro
-mkdir -p /etc/gtk-2.0 /etc/gtk-3.0 /etc/gtk-4.0
+mkdir -p /etc/gtk-3.0 /etc/gtk-4.0
 cat > /etc/gtk-3.0/settings.ini << EOF
 [Settings]
 gtk-application-prefer-dark-theme=true
@@ -294,7 +258,7 @@ EOF
 # Copiar la misma configuración para GTK4
 cp /etc/gtk-3.0/settings.ini /etc/gtk-4.0/settings.ini
 
-# Configuración de qt5ct para evitar imágenes borrosas y usar modo oscuro
+# Configuración de qt5ct
 mkdir -p /etc/xdg/qt5ct
 cat > /etc/xdg/qt5ct/qt5ct.conf << EOF
 [Appearance]
@@ -327,13 +291,6 @@ force_raster_widgets=1
 ignored_applications=@Invalid()
 EOF
 
-# Configurar Kvantum
-mkdir -p /etc/Kvantum
-cat > /etc/Kvantum/kvantum.kvconfig << EOF
-[General]
-theme=KvArcDark
-EOF
-
 # Configurar variables de entorno para el sistema
 cat > /etc/environment << EOF
 # Tema oscuro para Qt y GTK
@@ -352,7 +309,7 @@ mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,
 mkdir -p /home/antonio/Pictures/Screenshots
 mkdir -p /home/antonio/Wallpapers
 
-# Descargar algunos fondos de pantalla para hyprpaper
+# Descargar algunos fondos de pantalla para hyprpaper (con manejo de errores)
 print_message "Descargando algunos fondos de pantalla..."
 wget -q "https://w.wallhaven.cc/full/4x/wallhaven-4xkjmj.jpg" -O /home/antonio/Wallpapers/wallpaper1.jpg || \
   cp /usr/share/backgrounds/gnome/adwaita-night.jpg /home/antonio/Wallpapers/wallpaper1.jpg 2>/dev/null || \
@@ -448,7 +405,7 @@ env = WLR_DRM_NO_ATOMIC,1
 general {
     gaps_in = 2
     gaps_out = 8
-   border_size = 2
+    border_size = 2
     col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
     col.inactive_border = rgba(595959aa)
     resize_on_border = false
@@ -515,13 +472,13 @@ misc {
 ### INPUT ###
 #############
 input {
-    kb_layout = us
-    kb_variant =
+    kb_layout = us,es
+    kb_variant = ,
     kb_model =
-    kb_options =
+    kb_options = grp:alt_shift_toggle
     kb_rules =
     follow_mouse = 1
-   sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
+    sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
     touchpad {
         natural_scroll = false
     }
@@ -810,43 +767,6 @@ EOF
 # Cambiar propiedad de los archivos al usuario antonio
 chown -R antonio:antonio /home/antonio/
 
-# --- 21) CONFIGURAR TIMESHIFT PARA BACKUPS MANUALES ---
-print_message "Configurando Timeshift para backups manuales..."
-
-# Archivo de configuración de Timeshift
-mkdir -p /etc/timeshift
-cat > /etc/timeshift/timeshift.json << EOF
-{
-  "backup_device_uuid" : "",
-  "parent_device_uuid" : "",
-  "do_first_run" : "true",
-  "btrfs_mode" : "true",
-  "include_btrfs_home" : "true",
-  "stop_cron_emails" : "true",
-  "schedule_monthly" : "false",
-  "schedule_weekly" : "false",
-  "schedule_daily" : "false",
-  "schedule_hourly" : "false",
-  "schedule_boot" : "false",
-  "count_monthly" : "2",
-  "count_weekly" : "3",
-  "count_daily" : "5",
-  "count_hourly" : "6",
-  "count_boot" : "3",
-  "snapshot_size" : "0",
-  "snapshot_count" : "0",
-  "exclude_list" : [
-    "/root/**",
-    "/home/**",
-    "/var/tmp/**",
-    "/var/cache/**",
-    "/var/log/**"
-  ]
-}
-EOF
-
-print_success "Timeshift configurado para backups manuales"
-
 print_message "La instalación base ha sido completada."
 print_message "Después de reiniciar:"
 print_message "1. Retira el medio de instalación"
@@ -855,7 +775,8 @@ print_message "3. Inicia sesión como 'antonio'"
 print_message "4. Conecta a Internet con 'nmtui' si es necesario"
 print_message "5. Hyprland iniciará automáticamente con toda la configuración personalizada"
 print_message "6. Usa Ctrl+Super+T para cambiar el fondo de pantalla cuando lo desees"
-print_message "7. Para hacer backups manuales, ejecuta 'sudo timeshift --create --comments \"Mi backup\"'"
+print_message "7. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
+print_message "8. Para hacer backups manuales, usa Timeshift"
 EOL
 
 # Hacer ejecutable el script post-chroot
