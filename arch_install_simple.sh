@@ -168,40 +168,97 @@ pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
     python python-pip lua go nodejs npm typescript sqlite \
     clang cmake ninja meson gdb lldb git tmux \
     sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
-    hyprpaper hyprlock fastfetch pavucontrol ddcutil btop \
+    hyprpaper hyprshot fastfetch pavucontrol ddcutil btop \
     ttf-jetbrains-mono-nerd \
     yazi zathura zathura-pdf-mupdf bluetui swaync \
     noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
     xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
     adwaita-icon-theme gnome-themes-extra blueman \
     polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
-    mesa vulkan-radeon \
-    libreoffice-fresh imv glow wget
+    grim slurp wl-clipboard network-manager-applet \
+    libreoffice-fresh imv glow wget \
+    timeshift unzip qt5ct kvantum kvantum-theme-arc gtk-engine-murrine gtk3 gtk4 \
+    gvfs udisks2 thunar-archive-plugin \
+    papirus-icon-theme materia-gtk-theme
+
 print_success "Paquetes clave instalados"
 
-# --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
+# --- 14) CONFIGURAR FUENTE PREDETERMINADA DEL SISTEMA ---
+print_message "Configurando JetBrains Mono como fuente predeterminada..."
+mkdir -p /etc/fonts/conf.d/
+cat > /etc/fonts/local.conf << EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <alias>
+    <family>sans-serif</family>
+    <prefer>
+      <family>JetBrains Mono Nerd Font</family>
+    </prefer>
+  </alias>
+  <alias>
+    <family>serif</family>
+    <prefer>
+      <family>JetBrains Mono Nerd Font</family>
+    </prefer>
+  </alias>
+  <alias>
+    <family>monospace</family>
+    <prefer>
+      <family>JetBrains Mono Nerd Font</family>
+    </prefer>
+  </alias>
+</fontconfig>
+EOF
+fc-cache -f
+print_success "Fuente JetBrains Mono configurada como predeterminada"
+
+# --- 15) CONFIGURAR NVIDIA PARA WAYLAND ---
 print_message "Configurando NVIDIA para Wayland..."
 echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
+echo "options nvidia NVreg_PreserveVideoMemoryAllocations=1" >> /etc/modprobe.d/nvidia.conf
+echo "options nvidia NVreg_RegistryDwords=\"PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x1\"" >> /etc/modprobe.d/nvidia.conf
+echo "options nvidia-drm modeset=1" > /etc/modprobe.d/nvidia-drm.conf
+
+# Optimizaciones adicionales para NVIDIA en Wayland
+cat > /etc/profile.d/nvidia-wayland.sh << EOF
+#!/bin/bash
+# Optimizaciones para NVIDIA en Wayland
+export LIBVA_DRIVER_NAME=nvidia
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export GBM_BACKEND=nvidia-drm
+export __GL_GSYNC_ALLOWED=1
+export __GL_VRR_ALLOWED=1
+export NVD_BACKEND=direct
+export WLR_NO_HARDWARE_CURSORS=1
+EOF
+chmod +x /etc/profile.d/nvidia-wayland.sh
+
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
 mkinitcpio -P
 print_success "NVIDIA configurado para Wayland"
 
-# --- 15) CONFIGURAR GRUB ---
+# --- 16) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1"/' /etc/default/grub
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado"
 
-# --- 16) CREAR USUARIO ---
+# --- 17) CREAR USUARIO ---
 print_message "Creando usuario 'antonio'..."
 useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
 print_message "Configura la contraseña para el usuario 'antonio':"
 passwd antonio
-sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
-print_success "Usuario creado"
 
-# --- 17) HABILITAR SERVICIOS ---
+# Configurar sudoers usando EDITOR y visudo
+print_message "Configurando privilegios sudo para el usuario 'antonio'..."
+EDITOR=nano visudo -f /etc/sudoers.d/antonio
+echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/antonio
+chmod 440 /etc/sudoers.d/antonio
+print_success "Usuario creado con privilegios sudo"
+
+# --- 18) HABILITAR SERVICIOS ---
 print_message "Habilitando servicios..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
@@ -209,13 +266,596 @@ systemctl enable seatd
 systemctl enable fstrim.timer
 print_success "Servicios habilitados"
 
+# --- 19) CONFIGURAR TEMA OSCURO Y QT5CT ---
+print_message "Configurando tema oscuro para GTK y Qt..."
+
+# Configuración global de GTK para modo oscuro
+mkdir -p /etc/gtk-2.0 /etc/gtk-3.0 /etc/gtk-4.0
+cat > /etc/gtk-3.0/settings.ini << EOF
+[Settings]
+gtk-application-prefer-dark-theme=true
+gtk-theme-name=Materia-dark
+gtk-icon-theme-name=Papirus-Dark
+gtk-font-name=JetBrains Mono Nerd Font 11
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=24
+gtk-toolbar-style=GTK_TOOLBAR_BOTH_HORIZ
+gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
+gtk-button-images=1
+gtk-menu-images=1
+gtk-enable-event-sounds=0
+gtk-enable-input-feedback-sounds=0
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintslight
+gtk-xft-rgba=rgb
+EOF
+
+# Copiar la misma configuración para GTK4
+cp /etc/gtk-3.0/settings.ini /etc/gtk-4.0/settings.ini
+
+# Configuración de qt5ct para evitar imágenes borrosas y usar modo oscuro
+mkdir -p /etc/xdg/qt5ct
+cat > /etc/xdg/qt5ct/qt5ct.conf << EOF
+[Appearance]
+color_scheme_path=/usr/share/qt5ct/colors/darker.conf
+custom_palette=true
+icon_theme=Papirus-Dark
+standard_dialogs=default
+style=kvantum-dark
+[Fonts]
+fixed="JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0,Regular"
+general="Rubik,11,-1,5,50,0,0,0,0,0"
+[Interface]
+activate_item_on_single_click=1
+buttonbox_layout=0
+cursor_flash_time=1000
+dialog_buttons_have_icons=1
+double_click_interval=400
+gui_effects=General
+keyboard_scheme=2
+menus_have_icons=true
+show_shortcuts_in_context_menus=true
+stylesheets=@Invalid()
+toolbutton_style=4
+underline_shortcut=1
+wheel_scroll_lines=3
+[SettingsWindow]
+geometry=@ByteArray(\x1\xd9\xd0\xcb\0\x3\0\0\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99\0\0\0\0\0\0\0\0\0\0\x2\xde\0\0\x3\x1\0\0\0\0\x2\0\0\0\a\x80\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99)
+[Troubleshooting]
+force_raster_widgets=1
+ignored_applications=@Invalid()
+EOF
+
+# Configurar Kvantum
+mkdir -p /etc/Kvantum
+cat > /etc/Kvantum/kvantum.kvconfig << EOF
+[General]
+theme=KvArcDark
+EOF
+
+# Configurar variables de entorno para el sistema
+cat > /etc/environment << EOF
+# Tema oscuro para Qt y GTK
+QT_QPA_PLATFORMTHEME=qt5ct
+QT_STYLE_OVERRIDE=kvantum
+GTK_THEME=Materia-dark
+EOF
+
+print_success "Tema oscuro configurado"
+
+# --- 20) CONFIGURAR HYPRLAND, WAYBAR Y KITTY ---
+print_message "Configurando entorno Hyprland, Waybar y Kitty..."
+
+# Crear directorios de configuración
+mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,Kvantum}
+mkdir -p /home/antonio/Pictures/Screenshots
+mkdir -p /home/antonio/Wallpapers
+
+# Descargar algunos fondos de pantalla para hyprpaper
+print_message "Descargando algunos fondos de pantalla..."
+wget -q "https://w.wallhaven.cc/full/4x/wallhaven-4xkjmj.jpg" -O /home/antonio/Wallpapers/wallpaper1.jpg || \
+  cp /usr/share/backgrounds/gnome/adwaita-night.jpg /home/antonio/Wallpapers/wallpaper1.jpg 2>/dev/null || \
+  cp /usr/share/backgrounds/archlinux/archlinux-simplyblack.png /home/antonio/Wallpapers/wallpaper1.jpg 2>/dev/null || \
+  echo "No se pudieron descargar ni encontrar fondos de pantalla predeterminados"
+
+wget -q "https://w.wallhaven.cc/full/9d/wallhaven-9dmmy1.jpg" -O /home/antonio/Wallpapers/wallpaper2.jpg || \
+  cp /usr/share/backgrounds/gnome/adwaita-day.jpg /home/antonio/Wallpapers/wallpaper2.jpg 2>/dev/null || \
+  cp /usr/share/backgrounds/archlinux/archlinux-simplyblue.png /home/antonio/Wallpapers/wallpaper2.jpg 2>/dev/null
+
+# Configuración de hyprpaper
+cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
+preload = /home/antonio/Wallpapers/wallpaper1.jpg
+preload = /home/antonio/Wallpapers/wallpaper2.jpg
+
+wallpaper = HDMI-A-1,/home/antonio/Wallpapers/wallpaper1.jpg
+wallpaper = eDP-1,/home/antonio/Wallpapers/wallpaper2.jpg
+EOF
+
+# Script para cambiar el fondo de pantalla
+cat > /home/antonio/.config/hypr/scripts/wallpaper-changer.sh << 'EOF'
+#!/bin/bash
+WALLPAPERS_DIR="$HOME/Wallpapers"
+if [ ! -d "$WALLPAPERS_DIR" ] || [ -z "$(ls -A $WALLPAPERS_DIR)" ]; then
+    notify-send "Error" "No hay fondos de pantalla disponibles en $WALLPAPERS_DIR" -i dialog-error
+    exit 1
+fi
+
+WALLPAPERS=($WALLPAPERS_DIR/*)
+RANDOM_WALLPAPER=${WALLPAPERS[$RANDOM % ${#WALLPAPERS[@]}]}
+MONITOR=${1:-"eDP-1"}
+
+# Actualiza la configuración de hyprpaper
+sed -i "s|wallpaper = $MONITOR,.*|wallpaper = $MONITOR,$RANDOM_WALLPAPER|g" $HOME/.config/hypr/hyprpaper.conf
+
+# Recarga hyprpaper
+killall hyprpaper
+hyprpaper &
+
+notify-send "Fondo cambiado" "Nuevo fondo: $RANDOM_WALLPAPER" -i dialog-information
+EOF
+
+chmod +x /home/antonio/.config/hypr/scripts/wallpaper-changer.sh
+
+# Configuración de Hyprland
+cat > /home/antonio/.config/hypr/hyprland.conf << EOF
+################
+### MONITORS ###
+################
+# Configuración precisa según la salida de hyprctl monitors
+monitor=HDMI-A-1,1920x1080@144.01300,0x0,1
+monitor=eDP-1,2560x1600@165.00400,1920x0,1.6
+# Tecla para cambiar el fondo de pantalla
+bind = Ctrl+Super, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
+bind = SUPER SHIFT, Z, exec, hyprshot -m region -o ~/Pictures/Screenshots
+###################
+### MY PROGRAMS ###
+###################
+\$terminal = kitty
+\$fileManager = thunar
+\$menu = rofi -show drun
+#################
+### AUTOSTART ###
+#################
+exec-once = waybar
+exec-once = hyprpaper
+exec-once = blueman-applet
+exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+exec-once = nm-applet --indicator
+exec-once = swaync
+#############################
+### ENVIRONMENT VARIABLES ###
+#############################
+env = XCURSOR_SIZE,24
+env = HYPRCURSOR_SIZE,24
+env = QT_QPA_PLATFORMTHEME,qt5ct
+env = QT_QPA_PLATFORM,wayland
+env = GDK_BACKEND,wayland
+env = NVIDIA_FORCE_LOADING_X11GLX,1
+# Forzar modo oscuro
+env = GTK_THEME,Materia-dark
+# Optimizaciones para NVIDIA en Wayland
+env = LIBVA_DRIVER_NAME,nvidia
+env = __GLX_VENDOR_LIBRARY_NAME,nvidia
+env = GBM_BACKEND,nvidia-drm
+env = __GL_GSYNC_ALLOWED,1
+env = __GL_VRR_ALLOWED,1
+env = WLR_NO_HARDWARE_CURSORS,1
+env = WLR_DRM_NO_ATOMIC,1
+#####################
+### LOOK AND FEEL ###
+#####################
+general {
+    gaps_in = 2
+    gaps_out = 8
+   border_size = 2
+    col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
+    col.inactive_border = rgba(595959aa)
+    resize_on_border = false
+    allow_tearing = false
+    layout = dwindle
+}
+decoration {
+    rounding = 10
+    rounding_power = 2
+    # Change transparency of focused and unfocused windows
+    active_opacity = 1.0
+    inactive_opacity = 1.0
+    shadow {
+        enabled = true
+        range = 4
+        render_power = 3
+        color = rgba(1a1a1aee)
+    }
+    blur {
+        enabled = true
+        size = 3
+        passes = 1
+        vibrancy = 0.1696
+    }
+}
+animations {
+    enabled = yes, please :)
+    bezier = easeOutQuint,0.23,1,0.32,1
+    bezier = easeInOutCubic,0.65,0.05,0.36,1
+    bezier = linear,0,0,1,1
+    bezier = almostLinear,0.5,0.5,0.75,1.0
+    bezier = quick,0.15,0,0.1,1
+    animation = global, 1, 10, default
+    animation = border, 1, 5.39, easeOutQuint
+    animation = windows, 1, 4.79, easeOutQuint
+  animation = windowsIn, 1, 4.1, easeOutQuint, popin 87%
+    animation = windowsOut, 1, 1.49, linear, popin 87%
+    animation = fadeIn, 1, 1.73, almostLinear
+    animation = fadeOut, 1, 1.46, almostLinear
+    animation = fade, 1, 3.03, quick
+    animation = layers, 1, 3.81, easeOutQuint
+    animation = layersIn, 1, 4, easeOutQuint, fade
+    animation = layersOut, 1, 1.5, linear, fade
+    animation = fadeLayersIn, 1, 1.79, almostLinear
+    animation = fadeLayersOut, 1, 1.39, almostLinear
+    animation = workspaces, 1, 1.94, almostLinear, fade
+    animation = workspacesIn, 1, 1.21, almostLinear, fade
+    animation = workspacesOut, 1, 1.94, almostLinear, fade
+}
+dwindle {
+    pseudotile = true # Master switch for pseudotiling. Enabling is bound to mainMod + P in t>
+    preserve_split = true # You probably want this
+}
+master {
+    new_status = master
+}
+misc {
+    force_default_wallpaper = 0 # Set to 0 to disable the anime mascot wallpapers
+    disable_hyprland_logo = true # Disable the hyprland logo background
+    vfr = true # Variable framerate for better performance
+    vrr = 1 # Variable refresh rate - helps prevent tearing
+}
+#############
+### INPUT ###
+#############
+input {
+    kb_layout = us
+    kb_variant =
+    kb_model =
+    kb_options =
+    kb_rules =
+    follow_mouse = 1
+   sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
+    touchpad {
+        natural_scroll = false
+    }
+}
+gestures {
+    workspace_swipe = false
+}
+device {
+    name = epic-mouse-v1
+    sensitivity = -0.5
+}
+###################
+### KEYBINDINGS ###
+###################
+\$mainMod = SUPER # Sets "Windows" key as main modifier
+# Example binds, see https://wiki.hyprland.org/Configuring/Binds/ for more
+bind = \$mainMod, Q, exec, \$terminal
+bind = \$mainMod, C, killactive,
+bind = \$mainMod, M, exit,
+bind = \$mainMod, E, exec, \$fileManager
+bind = \$mainMod, V, togglefloating,
+bind = \$mainMod, R, exec, \$menu
+bind = \$mainMod, P, pseudo, # dwindle
+bind = \$mainMod, J, togglesplit, # dwindle
+bind = \$mainMod, F, fullscreen, # Toggle fullscreen
+# Move focus with mainMod + arrow keys
+bind = \$mainMod, left, movefocus, l
+bind = \$mainMod, right, movefocus, r
+bind = \$mainMod, up, movefocus, u
+bind = \$mainMod, down, movefocus, d
+
+# Switch workspaces with mainMod + [0-9]
+bind = \$mainMod, 1, workspace, 1
+bind = \$mainMod, 2, workspace, 2
+bind = \$mainMod, 3, workspace, 3
+bind = \$mainMod, 4, workspace, 4
+bind = \$mainMod, 5, workspace, 5
+bind = \$mainMod, 6, workspace, 6
+bind = \$mainMod, 7, workspace, 7
+bind = \$mainMod, 8, workspace, 8
+bind = \$mainMod, 9, workspace, 9
+bind = \$mainMod, 0, workspace, 10
+# Move active window to a workspace with mainMod + SHIFT + [0-9]
+bind = \$mainMod SHIFT, 1, movetoworkspace, 1
+bind = \$mainMod SHIFT, 2, movetoworkspace, 2
+bind = \$mainMod SHIFT, 3, movetoworkspace, 3
+bind = \$mainMod SHIFT, 4, movetoworkspace, 4
+bind = \$mainMod SHIFT, 5, movetoworkspace, 5
+bind = \$mainMod SHIFT, 6, movetoworkspace, 6
+bind = \$mainMod SHIFT, 7, movetoworkspace, 7
+bind = \$mainMod SHIFT, 8, movetoworkspace, 8
+bind = \$mainMod SHIFT, 9, movetoworkspace, 9
+bind = \$mainMod SHIFT, 0, movetoworkspace, 10
+# Example special workspace (scratchpad)
+bind = \$mainMod, S, togglespecialworkspace, magic
+bind = \$mainMod SHIFT, S, movetoworkspace, special:magic
+# Scroll through existing workspaces with mainMod + scroll
+bind = \$mainMod, mouse_down, workspace, e+1
+bind = \$mainMod, mouse_up, workspace, e-1
+# Move/resize windows with mainMod + LMB/RMB and dragging
+bindm = \$mainMod, mouse:272, movewindow
+bindm = \$mainMod, mouse:273, resizewindow
+# Laptop multimedia keys for volume and LCD brightness
+bindel = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
+bindel = ,XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+
+bindel = ,XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bindel = ,XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+bindel = ,XF86MonBrightnessUp, exec, brightnessctl s 10%+
+bindel = ,XF86MonBrightnessDown, exec, brightnessctl s 10%-
+# Media controls using playerctl
+bindl = , XF86AudioNext, exec, playerctl next
+bindl = , XF86AudioPause, exec, playerctl play-pause
+bindl = , XF86AudioPlay, exec, playerctl play-pause
+bindl = , XF86AudioPrev, exec, playerctl previous
+# Take screenshots
+bind = , Print, exec, grim -g "\$(slurp)" - | wl-copy
+##############################
+### WINDOWS AND WORKSPACES ###
+##############################
+# See https://wiki.hyprland.org/Configuring/Window-Rules/ for more
+# See https://wiki.hyprland.org/Configuring/Workspace-Rules/ for workspace rules
+# Example windowrule v1
+# windowrule = float, ^(kitty)\$
+# Example windowrule v2
+# windowrulev2 = float,class:^(kitty)\$,title:^(kitty)\$
+# Specific rules for installed applications
+windowrulev2 = float,class:^(pavucontrol)\$
+windowrulev2 = float,class:^(blueman-manager)\$
+windowrulev2 = float,class:^(nm-connection-editor)\$
+windowrulev2 = float,title:^(Steam - News)\$
+# Ignore maximize requests from apps. You'll probably like this.
+windowrulev2 = suppressevent maximize, class:.*
+# Fix some dragging issues with XWayland
+windowrulev2 = nofocus,class:^\$,title:^\$,xwayland:1,floating:1,fullscreen:0,pinned:0
+EOF
+
+# Configuración de usuario para qt5ct
+cat > /home/antonio/.config/qt5ct/qt5ct.conf << EOF
+[Appearance]
+color_scheme_path=/usr/share/qt5ct/colors/darker.conf
+custom_palette=true
+icon_theme=Papirus-Dark
+standard_dialogs=default
+style=kvantum-dark
+[Fonts]
+fixed="JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0,Regular"
+general="Rubik,11,-1,5,50,0,0,0,0,0"
+[Interface]
+activate_item_on_single_click=1
+buttonbox_layout=0
+cursor_flash_time=1000
+dialog_buttons_have_icons=1
+double_click_interval=400
+gui_effects=General
+keyboard_scheme=2
+menus_have_icons=true
+show_shortcuts_in_context_menus=true
+stylesheets=@Invalid()
+toolbutton_style=4
+underline_shortcut=1
+wheel_scroll_lines=3
+[SettingsWindow]
+geometry=@ByteArray(\x1\xd9\xd0\xcb\0\x3\0\0\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99\0\0\0\0\0\0\0\0\0\0\x2\xde\0\0\x3\x1\0\0\0\0\x2\0\0\0\a\x80\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99)
+[Troubleshooting]
+force_raster_widgets=1
+ignored_applications=@Invalid()
+EOF
+
+# GTK configuración de usuario (heredada del sistema)
+cat > /home/antonio/.config/gtk-3.0/settings.ini << EOF
+[Settings]
+gtk-application-prefer-dark-theme=true
+gtk-theme-name=Materia-dark
+gtk-icon-theme-name=Papirus-Dark
+gtk-font-name=JetBrains Mono Nerd Font 11
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=24
+gtk-toolbar-style=GTK_TOOLBAR_BOTH_HORIZ
+gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
+gtk-button-images=1
+gtk-menu-images=1
+gtk-enable-event-sounds=0
+gtk-enable-input-feedback-sounds=0
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintslight
+gtk-xft-rgba=rgb
+EOF
+
+cp /home/antonio/.config/gtk-3.0/settings.ini /home/antonio/.config/gtk-4.0/settings.ini
+
+# Configuración de Kvantum para el usuario
+mkdir -p /home/antonio/.config/Kvantum
+cat > /home/antonio/.config/Kvantum/kvantum.kvconfig << EOF
+[General]
+theme=KvArcDark
+EOF
+
+# Configuración de Waybar (config)
+cat > /home/antonio/.config/waybar/config << EOF
+{
+    "layer": "top",
+    "position": "top",
+    "height": 30,
+    "spacing": 0,
+    "modules-left": ["wlr/taskbar", "hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["custom/ram", "custom/cpu", "custom/gpu"],
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "icon-size": 18,
+        "tooltip-format": "{title}",
+        "on-click": "activate",
+        "on-click-middle": "close",
+        "ignore-list": []
+    },
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "format-icons": {
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "5": "5",
+            "default": ""
+        },
+        "on-click": "activate"
+    },
+    "clock": {
+        "format": "{:%H:%M:%S}",
+        "format-alt": "{:%Y-%m-%d}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "interval": 1
+    },
+    "custom/ram": {
+        "format": "<span color='#00FF00'>RAM</span> <span color='white'>{}</span>",
+        "exec": "free -m | awk '/^Mem/ {printf \\\"%d MiB\\\", \\\$3}'",
+        "interval": 1
+    },
+    "custom/cpu": {
+        "format": "<span color='#2F79F8'>CPU</span> <span color='white'>{}</span>",
+        "exec": "sensors | grep 'Tctl' | awk '{print \\\$2}' | cut -c 2- | tr -d '+'",
+        "interval": 1
+    },
+     "custom/gpu": {
+        "format": "<span color='#4B95C7'>GPU</span> <span color='white'>{}</span>",
+        "exec": "nvidia-smi --query-gpu=temperature.gpu,utilization.gpu --format=csv,noheader,nounits | awk -F', ' '{print \\\$1\\\"°C \\\"\\\$2\\\"%\"}'",
+        "interval": 1
+    }
+}
+EOF
+
+# Configuración de Waybar (style.css)
+cat > /home/antonio/.config/waybar/style.css << EOF
+* {
+    font-family: "JetBrains Mono Nerd Font", "Font Awesome 6 Free";
+    font-size: 16px;
+    border: none;
+    border-radius: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+}
+window#waybar {
+    background: #000000;
+    color: #ffffff;
+}
+#workspaces button {
+    padding: 0 5px;
+    background: transparent;
+    color: #ffffff;
+}
+#workspaces button.active {
+    color: #ffffff;
+    font-weight: bold;
+}
+#clock {
+    color: #ffffff;
+    padding: 0 10px;
+}
+#custom-ram {
+    color: #ffffff;
+    padding: 0 10px;
+}
+#custom-cpu {
+    padding: 0 10px;
+}
+#custom-gpu {
+    padding: 0 10px;
+}
+EOF
+
+# Configuración de Kitty
+cat > /home/antonio/.config/kitty/kitty.conf << EOF
+font_family JetBrainsMono Nerd Font
+font_size 12.0
+# Fondo gris oscuro elegante
+background #2B2B2B
+# Colores básicos ajustados para modo oscuro
+color0  #3B3B3B
+color8  #555555
+# --------------------------------------
+# Funciones personalizadas (Kitty)
+# --------------------------------------
+map ctrl+c copy_to_clipboard
+map ctrl+v paste_from_clipboard
+map ctrl+k send_text all \x01\x0B
+# --------------------------------------
+# Restaurar comportamiento original (Bash)
+# --------------------------------------
+map ctrl+shift+c send_text all \x03
+map ctrl+shift+v send_text all \x16
+map ctrl+shift+k send_text all \x0B
+EOF
+
+# Configure autostart para que se inicie automáticamente al iniciar sesión
+mkdir -p /home/antonio/.config/autostart
+cat > /home/antonio/.config/autostart/hyprland.desktop << EOF
+[Desktop Entry]
+Type=Application
+Name=Hyprland
+Exec=/usr/bin/Hyprland
+EOF
+
+# Cambiar propiedad de los archivos al usuario antonio
+chown -R antonio:antonio /home/antonio/
+
+# --- 21) CONFIGURAR TIMESHIFT PARA BACKUPS MANUALES ---
+print_message "Configurando Timeshift para backups manuales..."
+
+# Archivo de configuración de Timeshift
+mkdir -p /etc/timeshift
+cat > /etc/timeshift/timeshift.json << EOF
+{
+  "backup_device_uuid" : "",
+  "parent_device_uuid" : "",
+  "do_first_run" : "true",
+  "btrfs_mode" : "true",
+  "include_btrfs_home" : "true",
+  "stop_cron_emails" : "true",
+  "schedule_monthly" : "false",
+  "schedule_weekly" : "false",
+  "schedule_daily" : "false",
+  "schedule_hourly" : "false",
+  "schedule_boot" : "false",
+  "count_monthly" : "2",
+  "count_weekly" : "3",
+  "count_daily" : "5",
+  "count_hourly" : "6",
+  "count_boot" : "3",
+  "snapshot_size" : "0",
+  "snapshot_count" : "0",
+  "exclude_list" : [
+    "/root/**",
+    "/home/**",
+    "/var/tmp/**",
+    "/var/cache/**",
+    "/var/log/**"
+  ]
+}
+EOF
+
+print_success "Timeshift configurado para backups manuales"
+
 print_message "La instalación base ha sido completada."
 print_message "Después de reiniciar:"
 print_message "1. Retira el medio de instalación"
 print_message "2. Selecciona Arch Linux en GRUB"
 print_message "3. Inicia sesión como 'antonio'"
-print_message "4. Conecta a Internet con 'nmtui'"
-print_message "5. Sigue con la post-instalación según el README"
+print_message "4. Conecta a Internet con 'nmtui' si es necesario"
+print_message "5. Hyprland iniciará automáticamente con toda la configuración personalizada"
+print_message "6. Usa Ctrl+Super+T para cambiar el fondo de pantalla cuando lo desees"
+print_message "7. Para hacer backups manuales, ejecuta 'sudo timeshift --create --comments \"Mi backup\"'"
 EOL
 
 # Hacer ejecutable el script post-chroot
