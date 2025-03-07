@@ -325,26 +325,6 @@ mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,
 mkdir -p /home/antonio/Pictures/Screenshots
 mkdir -p /home/antonio/Wallpapers
 
-# Descargar algunos fondos de pantalla para hyprpaper (con manejo de errores)
-print_message "Descargando algunos fondos de pantalla..."
-wget -q "https://w.wallhaven.cc/full/4x/wallhaven-4xkjmj.jpg" -O /home/antonio/Wallpapers/wallpaper1.jpg || \
-  cp /usr/share/backgrounds/gnome/adwaita-night.jpg /home/antonio/Wallpapers/wallpaper1.jpg 2>/dev/null || \
-  cp /usr/share/backgrounds/archlinux/archlinux-simplyblack.png /home/antonio/Wallpapers/wallpaper1.jpg 2>/dev/null || \
-  echo "No se pudieron descargar ni encontrar fondos de pantalla predeterminados"
-
-wget -q "https://w.wallhaven.cc/full/9d/wallhaven-9dmmy1.jpg" -O /home/antonio/Wallpapers/wallpaper2.jpg || \
-  cp /usr/share/backgrounds/gnome/adwaita-day.jpg /home/antonio/Wallpapers/wallpaper2.jpg 2>/dev/null || \
-  cp /usr/share/backgrounds/archlinux/archlinux-simplyblue.png /home/antonio/Wallpapers/wallpaper2.jpg 2>/dev/null
-
-# Configuración de hyprpaper
-cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
-preload = /home/antonio/Wallpapers/wallpaper1.jpg
-preload = /home/antonio/Wallpapers/wallpaper2.jpg
-
-wallpaper = HDMI-A-1,/home/antonio/Wallpapers/wallpaper1.jpg
-wallpaper = eDP-1,/home/antonio/Wallpapers/wallpaper2.jpg
-EOF
-
 # Script para cambiar el fondo de pantalla
 cat > /home/antonio/.config/hypr/scripts/wallpaper-changer.sh << 'EOF'
 #!/bin/bash
@@ -370,6 +350,14 @@ EOF
 
 chmod +x /home/antonio/.config/hypr/scripts/wallpaper-changer.sh
 
+# Configuración básica de hyprpaper
+cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
+# Para añadir fondos, coloca imágenes en ~/Wallpapers y añade las siguientes líneas:
+# preload = /home/antonio/Wallpapers/tu-imagen.jpg
+# wallpaper = HDMI-A-1,/home/antonio/Wallpapers/tu-imagen.jpg
+# wallpaper = eDP-1,/home/antonio/Wallpapers/tu-imagen.jpg
+EOF
+
 # Configuración de Hyprland
 cat > /home/antonio/.config/hypr/hyprland.conf << EOF
 ################
@@ -391,7 +379,6 @@ bind = SUPER SHIFT, Z, exec, hyprshot -m region -o ~/Pictures/Screenshots
 ### AUTOSTART ###
 #################
 exec-once = waybar
-exec-once = hyprpaper
 exec-once = blueman-applet
 exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = nm-applet --indicator
@@ -790,9 +777,10 @@ print_message "2. Selecciona Arch Linux en GRUB"
 print_message "3. Inicia sesión como 'antonio'"
 print_message "4. Conecta a Internet con 'nmtui' si es necesario"
 print_message "5. Hyprland iniciará automáticamente con toda la configuración personalizada"
-print_message "6. Usa Ctrl+Super+T para cambiar el fondo de pantalla cuando lo desees"
-print_message "7. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
-print_message "8. Para hacer backups manuales, usa Timeshift"
+print_message "6. Instala tus propios fondos de pantalla en ~/Wallpapers y configura hyprpaper.conf"
+print_message "7. Usa Ctrl+Super+T para cambiar entre tus fondos de pantalla"
+print_message "8. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
+print_message "9. Para hacer backups manuales, usa Timeshift"
 EOL
 
 # Hacer ejecutable el script post-chroot
