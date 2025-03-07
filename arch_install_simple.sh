@@ -159,11 +159,15 @@ print_success "Repositorio multilib habilitado"
 print_message "Instalando paquetes básicos primero..."
 # Instalamos primero grub y los paquetes de red
 pacman -S --noconfirm grub efibootmgr networkmanager wpa_supplicant bluez bluez-utils
-# Habilitamos los servicios básicos
+
+print_success "Paquetes básicos instalados"
+
+# Habilitamos servicios básicos
+print_message "Habilitando servicios básicos..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable fstrim.timer
-print_success "Paquetes básicos instalados y servicios habilitados"
+print_success "Servicios habilitados"
 
 # --- 14) INSTALAR CONTROLADORES NVIDIA ---
 print_message "Instalando controladores NVIDIA..."
@@ -191,32 +195,38 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado"
 
-# --- 17) CREAR USUARIO ---
+# --- 17) CREAR USUARIO Y CONFIGURAR SUDO ---
+print_message "Configurando privilegios sudo..."
+# Primero configuramos sudo
+echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
+chmod 440 /etc/sudoers.d/wheel
+print_success "Privilegios sudo configurados"
+
+# Ahora creamos el usuario
 print_message "Creando usuario 'antonio'..."
-# Crear el usuario antonio con los grupos adecuados
-useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
+groupadd -f wheel # Aseguramos que el grupo wheel exista
+useradd -m -G wheel,video,audio,storage,optical -s /bin/bash antonio
 
-# Solicitar contraseña para el usuario antonio
-echo "Configura la contraseña para el usuario 'antonio':"
-while ! passwd antonio; do
-    echo "No se pudo establecer la contraseña. Inténtalo de nuevo:"
-done
-print_success "Usuario creado y contraseña configurada"
-
-# Configurar sudo para el grupo wheel usando EDITOR=nano visudo
-print_message "Configurando privilegios sudo para el usuario 'antonio'..."
-echo "Descomentar la línea de wheel en el archivo sudoers..."
-EDITOR=nano visudo
-
-# Verificar que el usuario tenga permisos sudo
-echo "Verificando configuración de sudo para el usuario 'antonio'..."
-if grep -q "^%wheel ALL=(ALL) ALL" /etc/sudoers || grep -q "^%wheel ALL=(ALL) ALL" /etc/sudoers.d/*; then
-    print_success "Permisos sudo configurados correctamente"
+# Verificar que el usuario se creó
+if id -u antonio >/dev/null 2>&1; then
+    print_success "Usuario antonio creado correctamente"
+    
+    # Establecer contraseña para 'antonio'
+    print_message "A continuación deberás configurar la contraseña para el usuario 'antonio':"
+    passwd antonio
 else
-    # Si no está descomentado, aplicar la configuración directamente
-    echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
-    chmod 440 /etc/sudoers.d/wheel
-    print_success "Permisos sudo configurados mediante archivo en sudoers.d"
+    print_error "Error al crear el usuario antonio. Intentando de nuevo..."
+    # Segundo intento
+    useradd -m -G wheel,video,audio,storage,optical -s /bin/bash antonio
+    
+    if id -u antonio >/dev/null 2>&1; then
+        print_success "Usuario antonio creado correctamente en el segundo intento"
+        print_message "A continuación deberás configurar la contraseña para el usuario 'antonio':"
+        passwd antonio
+    else
+        print_error "Falló la creación del usuario. Continúa la instalación."
+        print_error "Deberás crear el usuario manualmente después del reinicio."
+    fi
 fi
 
 # --- 18) INSTALAR PAQUETES DE ENTORNO DE ESCRITORIO ---
