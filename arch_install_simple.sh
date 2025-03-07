@@ -89,9 +89,7 @@ print_success "Subvolúmenes BTRFS montados"
 
 # --- 5) INSTALAR SISTEMA BASE ---
 print_message "Instalando sistema base (esto puede tomar tiempo)..."
-# Aseguramos que tenemos una lista actualizada de mirrors
-pacman -Sy --noconfirm archlinux-keyring
-pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs nano vim sudo wget
+pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs
 print_success "Sistema base instalado"
 
 # --- 6) GENERAR FSTAB ---
@@ -125,6 +123,11 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# --- 8) INSTALAR NANO ---
+print_message "Instalando nano..."
+pacman -Sy nano --noconfirm
+print_success "Nano instalado"
+
 # --- 9) CONFIGURAR LOCALE Y ZONA HORARIA ---
 print_message "Configurando locale y zona horaria..."
 sed -i 's/#es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
@@ -155,106 +158,67 @@ sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Repositorio multilib habilitado"
 
-# --- 13) INSTALAR PAQUETES BÁSICOS PRIMERO ---
-print_message "Instalando paquetes básicos primero..."
-# Instalamos primero grub y los paquetes de red
-pacman -S --noconfirm grub efibootmgr networkmanager wpa_supplicant bluez bluez-utils
+# --- 13) INSTALAR PAQUETES CLAVE ---
+print_message "Instalando paquetes clave (esto tomará tiempo)..."
+pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
+    hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
+    waybar rofi kitty networkmanager sudo grub efibootmgr \
+    pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
+    firefox discord steam obs-studio neovim bash egl-wayland thunar \
+    python python-pip lua go nodejs npm typescript sqlite \
+    clang cmake ninja meson gdb lldb git tmux \
+    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
+    hyprpaper hyprlock fastfetch pavucontrol ddcutil btop \
+    ttf-jetbrains-mono-nerd \
+    yazi zathura zathura-pdf-mupdf bluetui swaync \
+    noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
+    xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
+    adwaita-icon-theme gnome-themes-extra blueman \
+    polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
+    grim slurp wl-clipboard network-manager-applet \
+    libreoffice-fresh imv glow wget \
+    timeshift unzip gvfs udisks2 thunar-archive-plugin
+print_success "Paquetes clave instalados"
 
-print_success "Paquetes básicos instalados"
-
-# Habilitamos servicios básicos
-print_message "Habilitando servicios básicos..."
-systemctl enable NetworkManager
-systemctl enable bluetooth
-systemctl enable fstrim.timer
-print_success "Servicios habilitados"
-
-# --- 14) INSTALAR CONTROLADORES NVIDIA ---
-print_message "Instalando controladores NVIDIA..."
-pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils
-print_success "Controladores NVIDIA instalados"
-
-# --- 15) CONFIGURAR MKINITCPIO ---
-print_message "Configurando mkinitcpio para NVIDIA..."
-# Creamos la configuración para NVIDIA
+# --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
+print_message "Configurando NVIDIA para Wayland..."
 echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
 echo "options nvidia NVreg_PreserveVideoMemoryAllocations=1" >> /etc/modprobe.d/nvidia.conf
 echo "options nvidia NVreg_RegistryDwords=\"PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x1\"" >> /etc/modprobe.d/nvidia.conf
-
-# Modificamos mkinitcpio.conf para incluir los módulos de NVIDIA
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
-
-# Regeneramos la imagen de initramfs
 mkinitcpio -P
-print_success "mkinitcpio configurado para NVIDIA"
+print_success "NVIDIA configurado para Wayland"
 
-# --- 16) CONFIGURAR GRUB ---
+# --- 15) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
 sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado"
 
-# --- 17) CREAR USUARIO Y CONFIGURAR SUDO ---
-print_message "Configurando privilegios sudo..."
-# Primero configuramos sudo
+# --- 16) CREAR USUARIO ---
+print_message "Creando usuario 'antonio'..."
+# Primero aseguramos que exista el grupo wheel
+groupadd -f wheel
+# Crear el usuario
+useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
+# Configurar contraseña
+print_message "Configura la contraseña para el usuario 'antonio':"
+passwd antonio
+
+# Configurar sudo para el grupo wheel
+print_message "Configurando privilegios sudo para el usuario 'antonio'..."
 echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
-print_success "Privilegios sudo configurados"
+print_success "Usuario creado con privilegios sudo"
 
-# Ahora creamos el usuario
-print_message "Creando usuario 'antonio'..."
-groupadd -f wheel # Aseguramos que el grupo wheel exista
-useradd -m -G wheel,video,audio,storage,optical -s /bin/bash antonio
-
-# Verificar que el usuario se creó
-if id -u antonio >/dev/null 2>&1; then
-    print_success "Usuario antonio creado correctamente"
-    
-    # Establecer contraseña para 'antonio'
-    print_message "A continuación deberás configurar la contraseña para el usuario 'antonio':"
-    passwd antonio
-else
-    print_error "Error al crear el usuario antonio. Intentando de nuevo..."
-    # Segundo intento
-    useradd -m -G wheel,video,audio,storage,optical -s /bin/bash antonio
-    
-    if id -u antonio >/dev/null 2>&1; then
-        print_success "Usuario antonio creado correctamente en el segundo intento"
-        print_message "A continuación deberás configurar la contraseña para el usuario 'antonio':"
-        passwd antonio
-    else
-        print_error "Falló la creación del usuario. Continúa la instalación."
-        print_error "Deberás crear el usuario manualmente después del reinicio."
-    fi
-fi
-
-# --- 18) INSTALAR PAQUETES DE ENTORNO DE ESCRITORIO ---
-print_message "Instalando paquetes de entorno de escritorio (esto tomará tiempo)..."
-pacman -S --noconfirm \
-    xorg-server xorg-xwayland \
-    pipewire pipewire-pulse pipewire-alsa wireplumber \
-    hyprland waybar rofi kitty \
-    hyprpaper hyprshot \
-    grim slurp wl-clipboard \
-    thunar thunar-archive-plugin file-roller gvfs udisks2 \
-    ttf-jetbrains-mono-nerd ttf-dejavu ttf-liberation noto-fonts noto-fonts-emoji \
-    firefox \
-    polkit polkit-gnome xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
-    brightnessctl network-manager-applet \
-    qt5ct qt5-wayland qt6-wayland kvantum \
-    papirus-icon-theme materia-gtk-theme \
-    timeshift unzip \
-    discord steam obs-studio neovim bash egl-wayland \
-    python python-pip lua go nodejs npm typescript sqlite \
-    clang cmake ninja meson gdb lldb git tmux \
-    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
-    fastfetch pavucontrol ddcutil btop \
-    yazi zathura zathura-pdf-mupdf bluetui swaync \
-    adwaita-icon-theme gnome-themes-extra blueman \
-    libreoffice-fresh imv glow
-
-print_success "Paquetes de entorno de escritorio instalados"
+# --- 17) HABILITAR SERVICIOS ---
+print_message "Habilitando servicios..."
+systemctl enable NetworkManager
+systemctl enable bluetooth
+systemctl enable seatd
+systemctl enable fstrim.timer
+print_success "Servicios habilitados"
 
 # --- 19) CONFIGURAR TEMA OSCURO Y QT5CT ---
 print_message "Configurando tema oscuro para GTK y Qt..."
@@ -283,39 +247,6 @@ EOF
 
 # Copiar la misma configuración para GTK4
 cp /etc/gtk-3.0/settings.ini /etc/gtk-4.0/settings.ini
-
-# Configuración de qt5ct
-mkdir -p /etc/xdg/qt5ct
-cat > /etc/xdg/qt5ct/qt5ct.conf << EOF
-[Appearance]
-color_scheme_path=/usr/share/qt5ct/colors/darker.conf
-custom_palette=true
-icon_theme=Papirus-Dark
-standard_dialogs=default
-style=kvantum-dark
-[Fonts]
-fixed="JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0,Regular"
-general="Rubik,11,-1,5,50,0,0,0,0,0"
-[Interface]
-activate_item_on_single_click=1
-buttonbox_layout=0
-cursor_flash_time=1000
-dialog_buttons_have_icons=1
-double_click_interval=400
-gui_effects=General
-keyboard_scheme=2
-menus_have_icons=true
-show_shortcuts_in_context_menus=true
-stylesheets=@Invalid()
-toolbutton_style=4
-underline_shortcut=1
-wheel_scroll_lines=3
-[SettingsWindow]
-geometry=@ByteArray(\x1\xd9\xd0\xcb\0\x3\0\0\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99\0\0\0\0\0\0\0\0\0\0\x2\xde\0\0\x3\x1\0\0\0\0\x2\0\0\0\a\x80\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99)
-[Troubleshooting]
-force_raster_widgets=1
-ignored_applications=@Invalid()
-EOF
 
 # Configurar variables de entorno para el sistema
 cat > /etc/environment << EOF
@@ -376,8 +307,6 @@ cat > /home/antonio/.config/hypr/hyprland.conf << EOF
 # Configuración precisa según la salida de hyprctl monitors
 monitor=HDMI-A-1,1920x1080@144.01300,0x0,1
 monitor=eDP-1,2560x1600@165.00400,1920x0,1.6
-# Tecla para cambiar el fondo de pantalla
-bind = Ctrl+Super, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
 bind = SUPER SHIFT, Z, exec, hyprshot -m region -o ~/Pictures/Screenshots
 ###################
 ### MY PROGRAMS ###
@@ -389,9 +318,10 @@ bind = SUPER SHIFT, Z, exec, hyprshot -m region -o ~/Pictures/Screenshots
 ### AUTOSTART ###
 #################
 exec-once = waybar
+exec-once = hyprpaper
 exec-once = blueman-applet
 exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
-exec-once = nm-applet --indicator
+exec-once = nm-applet
 exec-once = swaync
 #############################
 ### ENVIRONMENT VARIABLES ###
@@ -418,7 +348,7 @@ env = WLR_DRM_NO_ATOMIC,1
 general {
     gaps_in = 2
     gaps_out = 8
-    border_size = 2
+   border_size = 2
     col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
     col.inactive_border = rgba(595959aa)
     resize_on_border = false
@@ -491,7 +421,7 @@ input {
     kb_options = grp:alt_shift_toggle
     kb_rules =
     follow_mouse = 1
-    sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
+   sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
     touchpad {
         natural_scroll = false
     }
@@ -589,67 +519,8 @@ windowrulev2 = suppressevent maximize, class:.*
 windowrulev2 = nofocus,class:^\$,title:^\$,xwayland:1,floating:1,fullscreen:0,pinned:0
 EOF
 
-# Configuración de usuario para qt5ct
-cat > /home/antonio/.config/qt5ct/qt5ct.conf << EOF
-[Appearance]
-color_scheme_path=/usr/share/qt5ct/colors/darker.conf
-custom_palette=true
-icon_theme=Papirus-Dark
-standard_dialogs=default
-style=kvantum-dark
-[Fonts]
-fixed="JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0,Regular"
-general="Rubik,11,-1,5,50,0,0,0,0,0"
-[Interface]
-activate_item_on_single_click=1
-buttonbox_layout=0
-cursor_flash_time=1000
-dialog_buttons_have_icons=1
-double_click_interval=400
-gui_effects=General
-keyboard_scheme=2
-menus_have_icons=true
-show_shortcuts_in_context_menus=true
-stylesheets=@Invalid()
-toolbutton_style=4
-underline_shortcut=1
-wheel_scroll_lines=3
-[SettingsWindow]
-geometry=@ByteArray(\x1\xd9\xd0\xcb\0\x3\0\0\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99\0\0\0\0\0\0\0\0\0\0\x2\xde\0\0\x3\x1\0\0\0\0\x2\0\0\0\a\x80\0\0\0\0\0\0\0\0\0\0\x4\x98\0\0\x3\x99)
-[Troubleshooting]
-force_raster_widgets=1
-ignored_applications=@Invalid()
-EOF
-
-# GTK configuración de usuario (heredada del sistema)
-cat > /home/antonio/.config/gtk-3.0/settings.ini << EOF
-[Settings]
-gtk-application-prefer-dark-theme=true
-gtk-theme-name=Materia-dark
-gtk-icon-theme-name=Papirus-Dark
-gtk-font-name=JetBrains Mono Nerd Font 11
-gtk-cursor-theme-name=Adwaita
-gtk-cursor-theme-size=24
-gtk-toolbar-style=GTK_TOOLBAR_BOTH_HORIZ
-gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
-gtk-button-images=1
-gtk-menu-images=1
-gtk-enable-event-sounds=0
-gtk-enable-input-feedback-sounds=0
-gtk-xft-antialias=1
-gtk-xft-hinting=1
-gtk-xft-hintstyle=hintslight
-gtk-xft-rgba=rgb
-EOF
-
-cp /home/antonio/.config/gtk-3.0/settings.ini /home/antonio/.config/gtk-4.0/settings.ini
-
-# Configuración de Kvantum para el usuario
-mkdir -p /home/antonio/.config/Kvantum
-cat > /home/antonio/.config/Kvantum/kvantum.kvconfig << EOF
-[General]
-theme=KvArcDark
-EOF
+# Añadir tecla para cambiar el fondo
+echo "bind = Ctrl+Super, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh" >> /home/antonio/.config/hypr/hyprland.conf
 
 # Configuración de Waybar (config)
 cat > /home/antonio/.config/waybar/config << EOF
@@ -787,10 +658,8 @@ print_message "2. Selecciona Arch Linux en GRUB"
 print_message "3. Inicia sesión como 'antonio'"
 print_message "4. Conecta a Internet con 'nmtui' si es necesario"
 print_message "5. Hyprland iniciará automáticamente con toda la configuración personalizada"
-print_message "6. Instala tus propios fondos de pantalla en ~/Wallpapers y configura hyprpaper.conf"
-print_message "7. Usa Ctrl+Super+T para cambiar entre tus fondos de pantalla"
-print_message "8. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
-print_message "9. Para hacer backups manuales, usa Timeshift"
+print_message "6. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
+print_message "7. Para hacer backups manuales, usa Timeshift"
 EOL
 
 # Hacer ejecutable el script post-chroot
