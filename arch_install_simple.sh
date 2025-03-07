@@ -193,15 +193,31 @@ print_success "GRUB configurado"
 
 # --- 17) CREAR USUARIO ---
 print_message "Creando usuario 'antonio'..."
+# Crear el usuario antonio con los grupos adecuados
 useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
-print_message "Configura la contraseña para el usuario 'antonio':"
-passwd antonio
 
-# Configurar sudoers para el grupo wheel
+# Solicitar contraseña para el usuario antonio
+echo "Configura la contraseña para el usuario 'antonio':"
+while ! passwd antonio; do
+    echo "No se pudo establecer la contraseña. Inténtalo de nuevo:"
+done
+print_success "Usuario creado y contraseña configurada"
+
+# Configurar sudo para el grupo wheel usando EDITOR=nano visudo
 print_message "Configurando privilegios sudo para el usuario 'antonio'..."
-echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
-chmod 440 /etc/sudoers.d/wheel
-print_success "Usuario creado con privilegios sudo"
+echo "Descomentar la línea de wheel en el archivo sudoers..."
+EDITOR=nano visudo
+
+# Verificar que el usuario tenga permisos sudo
+echo "Verificando configuración de sudo para el usuario 'antonio'..."
+if grep -q "^%wheel ALL=(ALL) ALL" /etc/sudoers || grep -q "^%wheel ALL=(ALL) ALL" /etc/sudoers.d/*; then
+    print_success "Permisos sudo configurados correctamente"
+else
+    # Si no está descomentado, aplicar la configuración directamente
+    echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
+    chmod 440 /etc/sudoers.d/wheel
+    print_success "Permisos sudo configurados mediante archivo en sudoers.d"
+fi
 
 # --- 18) INSTALAR PAQUETES DE ENTORNO DE ESCRITORIO ---
 print_message "Instalando paquetes de entorno de escritorio (esto tomará tiempo)..."
