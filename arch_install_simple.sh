@@ -162,46 +162,39 @@ print_success "Repositorio multilib habilitado"
 
 # --- 13) INSTALAR PAQUETES CLAVE ---
 print_message "Instalando paquetes clave (esto tomará tiempo)..."
-pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms nvidia-settings lib32-nvidia-utils \
+pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
     hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    waybar rofi-lbonn-wayland kitty networkmanager sudo grub efibootmgr \
-    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber bluez bluez-utils \
+    waybar rofi kitty networkmanager sudo grub efibootmgr \
+    pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
     firefox discord steam obs-studio neovim bash egl-wayland thunar \
     python python-pip lua go nodejs npm typescript sqlite \
     clang cmake ninja meson gdb lldb git tmux \
     sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
     hyprpaper hyprlock fastfetch pavucontrol ddcutil btop \
-    ttf-jetbrains-mono-nerd ttf-firacode-nerd ttf-nerd-fonts-symbols-common \
+    ttf-jetbrains-mono-nerd \
     yazi zathura zathura-pdf-mupdf bluetui swaync \
-    noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-dejavu ttf-liberation \
-    xdg-utils xorg-xrandr xorg-xrdb qt5-wayland qt6-wayland qt5ct qt6ct \
-    adwaita-icon-theme gnome-themes-extra papirus-icon-theme kvantum blueman \
-    polkit-gnome xdg-desktop-portal xdg-desktop-portal-gtk xdg-desktop-portal-kde brightnessctl playerctl \
+    noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
+    xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
+    adwaita-icon-theme gnome-themes-extra blueman \
+    polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
     grim slurp wl-clipboard network-manager-applet \
-    libreoffice-fresh imv glow wget dex \
+    libreoffice-fresh imv glow wget \
     timeshift unzip gvfs udisks2 thunar-archive-plugin \
-    os-prober ntfs-3g lxappearance \
-    libappindicator-gtk3 libva-nvidia-driver opencl-nvidia \
-    nvidia-prime mesa mesa-utils lib32-mesa qalculate-gtk
+    os-prober ntfs-3g
 print_success "Paquetes clave instalados"
 
 # --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
 print_message "Configurando NVIDIA para Wayland..."
-# Configuraciones optimizadas para NVIDIA en Wayland
-echo "options nvidia_drm modeset=1 fbdev=1" > /etc/modprobe.d/nvidia.conf
+echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
 echo "options nvidia NVreg_PreserveVideoMemoryAllocations=1" >> /etc/modprobe.d/nvidia.conf
 echo "options nvidia NVreg_RegistryDwords=\"PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x1\"" >> /etc/modprobe.d/nvidia.conf
-# Agregar NVIDIA al inicio
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
-# Generar initramfs
 mkinitcpio -P
-# Blacklist de módulos nouveau
-echo "blacklist nouveau" > /etc/modprobe.d/blacklist-nouveau.conf
 print_success "NVIDIA configurado para Wayland"
 
 # --- 15) CONFIGURAR GRUB PARA DUAL BOOT ---
 print_message "Configurando GRUB para dual boot..."
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1 amd_pstate=active nowatchdog"/' /etc/default/grub
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 # Habilitar os-prober para detectar Windows
 echo "GRUB_DISABLE_OS_PROBER=false" >> /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
@@ -226,18 +219,7 @@ echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
 print_success "Usuario creado con privilegios sudo"
 
-# --- 17) INSTALAR AUR HELPER (YAY) ---
-print_message "Instalando YAY (AUR Helper)..."
-cd /tmp
-git clone https://aur.archlinux.org/yay-bin.git
-chown -R antonio:antonio /tmp/yay-bin
-cd yay-bin
-sudo -u antonio makepkg -si --noconfirm
-cd ..
-rm -rf yay-bin
-print_success "YAY instalado"
-
-# --- 18) HABILITAR SERVICIOS ---
+# --- 17) HABILITAR SERVICIOS ---
 print_message "Habilitando servicios..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
@@ -253,7 +235,7 @@ mkdir -p /etc/gtk-3.0 /etc/gtk-4.0
 cat > /etc/gtk-3.0/settings.ini << EOF
 [Settings]
 gtk-application-prefer-dark-theme=true
-gtk-theme-name=Adwaita-dark
+gtk-theme-name=Materia-dark
 gtk-icon-theme-name=Papirus-Dark
 gtk-font-name=JetBrains Mono Nerd Font 11
 gtk-cursor-theme-name=Adwaita
@@ -278,36 +260,16 @@ cat > /etc/environment << EOF
 # Tema oscuro para Qt y GTK
 QT_QPA_PLATFORMTHEME=qt5ct
 QT_STYLE_OVERRIDE=kvantum
-GTK_THEME=Adwaita-dark
-
-# Variables para mejorar escalado y rendimiento
-XCURSOR_SIZE=24
-GDK_SCALE=1
-GDK_DPI_SCALE=1
-QT_SCALE_FACTOR=1
-QT_AUTO_SCREEN_SCALE_FACTOR=1
-QT_ENABLE_HIGHDPI_SCALING=1
-MOZ_ENABLE_WAYLAND=1
-MOZ_WEBRENDER=1
-
-# Variables para NVIDIA en Wayland
-LIBVA_DRIVER_NAME=nvidia
-__GLX_VENDOR_LIBRARY_NAME=nvidia
-GBM_BACKEND=nvidia-drm
-__GL_GSYNC_ALLOWED=1
-__GL_VRR_ALLOWED=1
-WLR_NO_HARDWARE_CURSORS=1
-HYPRDEBUG=1
-HYPRDEBUG_TRACE=1
+GTK_THEME=Materia-dark
 EOF
 
-print_success "Tema oscuro y variables de entorno configurados"
+print_success "Tema oscuro configurado"
 
 # --- 20) CONFIGURAR HYPRLAND, WAYBAR Y KITTY ---
 print_message "Configurando entorno Hyprland, Waybar y Kitty..."
 
 # Crear directorios de configuración
-mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,Kvantum,rofi}
+mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,Kvantum}
 mkdir -p /home/antonio/Pictures/Screenshots
 mkdir -p /home/antonio/Wallpapers
 
@@ -350,15 +312,15 @@ cat > /home/antonio/.config/hypr/hyprland.conf << EOF
 ### MONITORS ###
 ################
 # Configuración exacta basada en hyprctl monitors
-monitor=HDMI-A-1,1920x1080@144.01300,0x0,1,vrr,false,model:MSI G241,serial:0x0000024D
-monitor=eDP-1,2560x1600@165.00400,1920x0,1.60,vrr,true,model:0x0A40,make:BOE
+monitor=HDMI-A-1,1920x1080@144.01300,0x0,1
+monitor=eDP-1,2560x1600@165.00400,1920x0,1.6
 bind = SUPER SHIFT, Z, exec, hyprshot -m region -o ~/Pictures/Screenshots
 ###################
 ### MY PROGRAMS ###
 ###################
 \$terminal = kitty
 \$fileManager = thunar
-\$menu = rofi -show drun -theme ~/.config/rofi/config.rasi
+\$menu = rofi -show drun
 #################
 ### AUTOSTART ###
 #################
@@ -366,7 +328,7 @@ exec-once = waybar
 exec-once = hyprpaper
 exec-once = blueman-applet
 exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
-exec-once = nm-applet --indicator
+exec-once = nm-applet
 exec-once = swaync
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 #############################
@@ -377,14 +339,10 @@ env = HYPRCURSOR_SIZE,24
 env = QT_QPA_PLATFORMTHEME,qt5ct
 env = QT_QPA_PLATFORM,wayland
 env = QT_WAYLAND_DISABLE_WINDOWDECORATION,1
-env = QT_AUTO_SCREEN_SCALE_FACTOR,1
-env = QT_SCALE_FACTOR,1
 env = GDK_BACKEND,wayland
-env = GDK_SCALE,1
-env = GDK_DPI_SCALE,1
 env = NVIDIA_FORCE_LOADING_X11GLX,1
 # Forzar modo oscuro
-env = GTK_THEME,Adwaita-dark
+env = GTK_THEME,Materia-dark
 # Optimizaciones para NVIDIA en Wayland
 env = LIBVA_DRIVER_NAME,nvidia
 env = __GLX_VENDOR_LIBRARY_NAME,nvidia
@@ -393,18 +351,13 @@ env = __GL_GSYNC_ALLOWED,1
 env = __GL_VRR_ALLOWED,1
 env = WLR_NO_HARDWARE_CURSORS,1
 env = WLR_DRM_NO_ATOMIC,1
-env = MOZ_ENABLE_WAYLAND,1
-env = MOZ_WEBRENDER,1
-# Debug
-env = HYPRDEBUG,1
-env = HYPRDEBUG_TRACE,1
 #####################
 ### LOOK AND FEEL ###
 #####################
 general {
     gaps_in = 2
     gaps_out = 8
-    border_size = 2
+   border_size = 2
     col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
     col.inactive_border = rgba(595959aa)
     resize_on_border = false
@@ -440,7 +393,7 @@ animations {
     animation = global, 1, 10, default
     animation = border, 1, 5.39, easeOutQuint
     animation = windows, 1, 4.79, easeOutQuint
-    animation = windowsIn, 1, 4.1, easeOutQuint, popin 87%
+  animation = windowsIn, 1, 4.1, easeOutQuint, popin 87%
     animation = windowsOut, 1, 1.49, linear, popin 87%
     animation = fadeIn, 1, 1.73, almostLinear
     animation = fadeOut, 1, 1.46, almostLinear
@@ -466,8 +419,6 @@ misc {
     disable_hyprland_logo = true # Disable the hyprland logo background
     vfr = true # Variable framerate for better performance
     vrr = 1 # Variable refresh rate - helps prevent tearing
-    mouse_move_enables_dpms = true # Wake up displays when mouse moves
-    key_press_enables_dpms = true # Wake up displays when a key is pressed
 }
 xwayland {
     force_zero_scaling = true
@@ -482,11 +433,9 @@ input {
     kb_options = grp:alt_shift_toggle
     kb_rules =
     follow_mouse = 1
-    sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
+   sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
     touchpad {
         natural_scroll = false
-        disable_while_typing = true
-        tap-to-click = true
     }
 }
 gestures {
@@ -576,108 +525,17 @@ windowrulev2 = float,class:^(pavucontrol)\$
 windowrulev2 = float,class:^(blueman-manager)\$
 windowrulev2 = float,class:^(nm-connection-editor)\$
 windowrulev2 = float,title:^(Steam - News)\$
-windowrulev2 = float,class:^(qt5ct)\$
-windowrulev2 = float,class:^(qt6ct)\$
-windowrulev2 = float,class:^(lxappearance)\$
 # Ignore maximize requests from apps. You'll probably like this.
 windowrulev2 = suppressevent maximize, class:.*
 # Fix some dragging issues with XWayland
 windowrulev2 = nofocus,class:^\$,title:^\$,xwayland:1,floating:1,fullscreen:0,pinned:0
-# VSCode específicamente
+# Arreglos para VSCode y aplicaciones que se ven borrosas
 windowrulev2 = opacity 1.0 override,class:^(code-oss)\$
 windowrulev2 = opacity 1.0 override,class:^(Code)\$
-windowrulev2 = rounding 0,class:^(code-oss)\$
-windowrulev2 = rounding 0,class:^(Code)\$
 EOF
 
 # Añadir tecla para cambiar el fondo
 echo "bind = Ctrl+Super, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh" >> /home/antonio/.config/hypr/hyprland.conf
-
-# Configuración de Rofi
-cat > /home/antonio/.config/rofi/config.rasi << EOF
-configuration {
-    display-drun: "Aplicaciones";
-    display-window: "Ventanas";
-    drun-display-format: "{icon} {name}";
-    font: "JetBrains Mono Nerd Font Medium 14";
-    modi: "window,run,drun";
-    show-icons: true;
-    icon-theme: "Papirus-Dark";
-}
-
-@theme "/dev/null"
-
-* {
-    bg: #1e1e2e;
-    bg-alt: #313244;
-    fg: #cdd6f4;
-    fg-alt: #7f849c;
-    
-    border: 0;
-    margin: 0;
-    padding: 0;
-    spacing: 0;
-}
-
-window {
-    width: 45%;
-    background-color: @bg;
-    border-radius: 8px;
-}
-
-element {
-    padding: 8 12;
-    background-color: transparent;
-    text-color: @fg-alt;
-}
-
-element selected {
-    text-color: @fg;
-    background-color: @bg-alt;
-    border-radius: 4px;
-}
-
-element-text {
-    background-color: transparent;
-    text-color: inherit;
-    vertical-align: 0.5;
-}
-
-element-icon {
-    size: 24;
-    padding: 0 10 0 0;
-    background-color: transparent;
-}
-
-entry {
-    padding: 12;
-    background-color: @bg-alt;
-    text-color: @fg;
-}
-
-inputbar {
-    children: [prompt, entry];
-    background-color: @bg;
-}
-
-listview {
-    background-color: @bg;
-    columns: 1;
-    lines: 10;
-}
-
-mainbox {
-    children: [inputbar, listview];
-    background-color: @bg;
-}
-
-prompt {
-    enabled: true;
-    padding: 12;
-    background-color: @bg-alt;
-    text-color: @fg;
-}
-EOF
 
 # Configuración exacta de Waybar (config)
 cat > /home/antonio/.config/waybar/config << EOF
@@ -805,88 +663,39 @@ Name=Hyprland
 Exec=/usr/bin/Hyprland
 EOF
 
-# Script post-instalación para instalar VSCode
-cat > /home/antonio/post-install.sh << 'EOF'
-#!/bin/bash
-
-# Colores para mensajes
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-echo -e "${BLUE}[POST-INSTALACIÓN]${NC} Instalando Visual Studio Code..."
-yay -S visual-studio-code-bin --noconfirm
-
-echo -e "${BLUE}[POST-INSTALACIÓN]${NC} Configurando VSCode para Wayland..."
-mkdir -p ~/.config
-cat > ~/.config/code-flags.conf << EOL
---enable-features=UseOzonePlatform
---ozone-platform=wayland
---enable-wayland-ime
-EOL
-
-echo -e "${BLUE}[POST-INSTALACIÓN]${NC} Instalando extensiones recomendadas para VSCode..."
-
-extensions=(
-    "ms-vscode.cpptools-extension-pack"
-    "rust-lang.rust-analyzer"
-    "golang.go"
-    "ms-python.python"
-    "esbenp.prettier-vscode"
-    "PKief.material-icon-theme"
-    "zhuangtongfa.material-theme"
-    "ritwickdey.LiveServer"
-)
-
-for ext in "${extensions[@]}"; do
-    code --install-extension "$ext" --force
-done
-
-echo -e "${GREEN}[COMPLETADO]${NC} Visual Studio Code configurado correctamente!"
-echo -e "${BLUE}[INFO]${NC} Si las aplicaciones se ven borrosas, intenta estas soluciones:"
-echo "  1. Para aplicaciones GTK: editar ~/.config/gtk-3.0/settings.ini y ~/.config/gtk-4.0/settings.ini"
-echo "  2. Para aplicaciones Qt: usar qt5ct y qt6ct para configurar la escala"
-echo "  3. Para aplicaciones específicas, crear reglas en ~/.config/hypr/hyprland.conf"
-EOF
-
-chmod +x /home/antonio/post-install.sh
-chown -R antonio:antonio /home/antonio/
-
-# --- 21) CREAR SCRIPT DE RECOMENDACIONES Y POST-INSTALACIÓN ---
-cat > /home/antonio/recomendaciones.txt << EOF
+# Recomendaciones para post-instalación (solucionar problemas con aplicaciones borrosas)
+cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOF'
 === RECOMENDACIONES POST-INSTALACIÓN ===
 
-1. DESPUÉS DE INICIAR SESIÓN, EJECUTA:
-   $ bash ~/post-install.sh
-   Esto instalará VS Code configurado para Wayland y algunas extensiones útiles.
+Para instalar Visual Studio Code y que se vea correctamente en tus monitores:
 
-2. SI LAS APLICACIONES SE VEN BORROSAS:
-   - Usar lxappearance para configurar temas GTK
-   - Usar qt5ct y qt6ct para configurar temas Qt
-   - Agregar reglas específicas en ~/.config/hypr/hyprland.conf
+1. Instalar VS Code:
+   $ sudo pacman -S code
 
-3. INSTALAR TEMAS ADICIONALES:
-   $ yay -S catppuccin-gtk-theme-mocha catppuccin-cursors-mocha
+2. Si se ve borroso, crea este archivo:
+   $ mkdir -p ~/.config
+   $ nano ~/.config/code-flags.conf
 
-4. SOLUCIONAR PROBLEMAS CON APLICACIONES ESPECÍFICAS:
-   Si VS Code sigue viéndose borroso después de la configuración automática, 
-   prueba a editar ~/.config/code-flags.conf:
-   --ozone-platform-hint=auto
-   --force-device-scale-factor=1.0
+   Y añade estas líneas:
+   --enable-features=UseOzonePlatform
+   --ozone-platform=wayland
+   --enable-wayland-ime
 
-5. MONITOREO DEL SISTEMA:
-   $ yay -S btop
+3. Si los problemas persisten, instala qt5ct y kvantum:
+   $ sudo pacman -S qt5ct kvantum
 
-6. CONFIGURAR NVIDIA PRIME (PARA LAPTOPS CON GPU INTEGRADA Y DEDICADA):
-   $ sudo prime-run glxinfo | grep "OpenGL renderer"
-   $ sudo prime-run [aplicación] # Para ejecutar aplicaciones con la GPU NVIDIA
+4. Edita tu archivo ~/.config/hypr/hyprland.conf y añade:
+   windowrulev2 = opacity 1.0 override,class:^(code-oss)$
+   windowrulev2 = opacity 1.0 override,class:^(Code)$
 
-7. CONFIGURAR TIMESHIFT PARA BACKUPS AUTOMÁTICOS:
+5. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift
+
+6. Configurar timeshift para hacer copias de seguridad regulares:
    $ sudo timeshift-gtk
-
-Estos pasos te ayudarán a tener una configuración óptima de tu sistema.
 EOF
+
+# Cambiar propiedad de los archivos al usuario antonio
+chown -R antonio:antonio /home/antonio/
 
 print_message "La instalación base ha sido completada."
 print_message "Después de reiniciar:"
@@ -894,9 +703,9 @@ print_message "1. Retira el medio de instalación"
 print_message "2. Selecciona Arch Linux o Windows en GRUB"
 print_message "3. Si seleccionas Arch, inicia sesión como 'antonio'"
 print_message "4. Conecta a Internet con 'nmtui' si es necesario"
-print_message "5. Ejecuta el script ~/post-install.sh para instalar VS Code"
-print_message "6. Revisa el archivo ~/recomendaciones.txt para más información"
-print_message "7. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
+print_message "5. Revisa el archivo ~/recomendaciones-post-instalacion.txt para más información"
+print_message "6. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
+print_message "7. Para hacer backups manuales, usa Timeshift"
 EOL
 
 # Hacer ejecutable el script post-chroot
