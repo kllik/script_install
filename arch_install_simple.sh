@@ -270,7 +270,7 @@ print_message "Configurando entorno Hyprland, Waybar y Kitty..."
 
 # Crear directorios de configuración
 mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,Kvantum}
-mkdir -p /home/antonio/Pictures/Screenshots
+mkdir -p /home/antonio/Imágenes/Capturas
 mkdir -p /home/antonio/Wallpapers
 
 # Script para cambiar el fondo de pantalla
@@ -314,7 +314,7 @@ cat > /home/antonio/.config/hypr/hyprland.conf << EOF
 # Configuración exacta basada en hyprctl monitors
 monitor=HDMI-A-1,1920x1080@144.01300,0x0,1
 monitor=eDP-1,2560x1600@165.00400,1920x0,1.6
-bind = SUPER SHIFT, Z, exec, hyprshot -m region -o ~/Pictures/Screenshots
+bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/Capturas/captura-$(date +'%Y%m%d-%H%M%S').png
 ###################
 ### MY PROGRAMS ###
 ###################
