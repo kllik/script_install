@@ -669,29 +669,22 @@ cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOF'
 
 Para instalar Visual Studio Code y que se vea correctamente en tus monitores:
 
-1. Instalar VS Code:
-   $ sudo pacman -S code
+1. Instalar yay:
+sudo pacman -S --needed git base-devel
+git clone https://aur.archlinux.org/yay.git
+cd yay
+makepkg -si
 
-2. Si se ve borroso, crea este archivo:
-   $ mkdir -p ~/.config
-   $ nano ~/.config/code-flags.conf
+2. Instalar Visual Studio Code
+yay -S visual-studio-code-bin
 
-   Y añade estas líneas:
-   --enable-features=UseOzonePlatform
-   --ozone-platform=wayland
-   --enable-wayland-ime
+3. Instalar Rust
+sudo pacman -S rustup
+rustup default stable
 
-3. Si los problemas persisten, instala qt5ct y kvantum:
-   $ sudo pacman -S qt5ct kvantum
+4. Instalar Tauri
+sudo npm install -g @tauri-apps/cli
 
-4. Edita tu archivo ~/.config/hypr/hyprland.conf y añade:
-   windowrulev2 = opacity 1.0 override,class:^(code-oss)$
-   windowrulev2 = opacity 1.0 override,class:^(Code)$
-
-5. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift
-
-6. Configurar timeshift para hacer copias de seguridad regulares:
-   $ sudo timeshift-gtk
 EOF
 
 # Cambiar propiedad de los archivos al usuario antonio
