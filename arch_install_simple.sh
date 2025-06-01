@@ -40,12 +40,12 @@ fi
 DISK="/dev/nvme0n1"
 EFI_DEV="${DISK}p5"  # Partición 5: EFI System (1GB)
 SWAP_DEV="${DISK}p6"  # Partición 6: Linux swap (8GB)
-SYSTEM_DEV="${DISK}p7"  # Partición 7: Linux filesystem (resto)
+SYSTEM_DEV="${DISK}p7"  # Partición 7: Linux filesystem (440GB)
 
 print_message "Dispositivos a utilizar para dual boot:"
 print_message "Partición EFI: $EFI_DEV (1GB)"
 print_message "Partición SWAP: $SWAP_DEV (8GB)"
-print_message "Partición Sistema (BTRFS): $SYSTEM_DEV (resto del disco)"
+print_message "Partición Sistema (BTRFS): $SYSTEM_DEV (440GB)"
 print_warning "Este script asume que ya creaste las particiones con cfdisk"
 print_warning "Asegúrate de que las particiones existan y sean correctas"
 print_warning "Este script está configurado para dual boot con Windows"
@@ -69,23 +69,25 @@ print_message "Formateando partición del sistema como BTRFS (${SYSTEM_DEV})..."
 mkfs.btrfs -f $SYSTEM_DEV
 print_success "Partición BTRFS formateada"
 
-# --- 3) CREAR SUBVOLÚMENES BTRFS PARA TIMESHIFT ---
+# --- 3) CREAR SUBVOLÚMENES BTRFS ---
 print_message "Creando subvolúmenes BTRFS..."
 mount $SYSTEM_DEV /mnt
 btrfs subvolume create /mnt/@
 btrfs subvolume create /mnt/@home
 btrfs subvolume create /mnt/@var
-btrfs subvolume create /mnt/@snapshots
+btrfs subvolume create /mnt/@opt
+btrfs subvolume create /mnt/@tmp
 umount /mnt
 print_success "Subvolúmenes BTRFS creados"
 
 # --- 4) MONTAR SUBVOLÚMENES BTRFS ---
 print_message "Montando subvolúmenes BTRFS..."
 mount -o noatime,compress=zstd,space_cache=v2,subvol=@ $SYSTEM_DEV /mnt
-mkdir -p /mnt/{boot/efi,home,var,.snapshots}
+mkdir -p /mnt/{boot/efi,home,var,opt,tmp}
 mount -o noatime,compress=zstd,space_cache=v2,subvol=@home $SYSTEM_DEV /mnt/home
 mount -o noatime,compress=zstd,space_cache=v2,subvol=@var $SYSTEM_DEV /mnt/var
-mount -o noatime,compress=zstd,space_cache=v2,subvol=@snapshots $SYSTEM_DEV /mnt/.snapshots
+mount -o noatime,compress=zstd,space_cache=v2,subvol=@opt $SYSTEM_DEV /mnt/opt
+mount -o noatime,compress=zstd,space_cache=v2,subvol=@tmp $SYSTEM_DEV /mnt/tmp
 mount $EFI_DEV /mnt/boot/efi
 print_success "Subvolúmenes BTRFS montados"
 
@@ -162,68 +164,97 @@ print_success "Repositorio multilib habilitado"
 
 # --- 13) INSTALAR PAQUETES CLAVE ---
 print_message "Instalando paquetes clave (esto tomará tiempo)..."
-pacman -S --noconfirm nvidia nvidia-utils nvidia-dkms lib32-nvidia-utils \
+pacman -S --noconfirm \
+    nvidia nvidia-utils nvidia-dkms nvidia-settings lib32-nvidia-utils \
+    vulkan-icd-loader lib32-vulkan-icd-loader \
     hyprland xdg-desktop-portal-hyprland xorg-xwayland wlroots \
-    waybar rofi kitty networkmanager sudo grub efibootmgr \
-    pipewire pipewire-pulse pipewire-alsa wireplumber bluez bluez-utils \
+    waybar rofi alacritty networkmanager sudo grub efibootmgr \
+    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
+    bluez bluez-utils blueman \
     firefox discord steam obs-studio neovim bash egl-wayland thunar \
-    python python-pip lua go nodejs npm typescript sqlite \
-    clang cmake ninja meson gdb lldb git tmux \
-    sdl2 vulkan-icd-loader vulkan-validation-layers vulkan-tools spirv-tools \
+    python python-pip lua nodejs npm git tmux \
+    gcc clang cmake ninja meson gdb lldb \
+    sdl2 vulkan-validation-layers vulkan-tools spirv-tools \
     hyprpaper hyprlock fastfetch pavucontrol ddcutil btop \
-    ttf-jetbrains-mono-nerd \
+    ttf-jetbrains-mono-nerd ttf-font-awesome \
     yazi zathura zathura-pdf-mupdf bluetui swaync \
     noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation \
     xdg-utils xorg-xrandr qt5-wayland qt6-wayland \
-    adwaita-icon-theme gnome-themes-extra blueman \
-    polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
+    adwaita-icon-theme gnome-themes-extra \
+    polkit polkit-gnome xdg-desktop-portal-gtk brightnessctl playerctl \
     grim slurp wl-clipboard network-manager-applet \
     libreoffice-fresh imv glow wget \
-    timeshift unzip gvfs udisks2 thunar-archive-plugin \
-    os-prober ntfs-3g
+    unzip gvfs udisks2 thunar-archive-plugin \
+    os-prober ntfs-3g mtools dosfstools \
+    php sqlite rust rustup go \
+    jdk-openjdk dotnet-sdk kotlin \
+    typescript swift-language
 print_success "Paquetes clave instalados"
 
 # --- 14) CONFIGURAR NVIDIA PARA WAYLAND ---
 print_message "Configurando NVIDIA para Wayland..."
-echo "options nvidia_drm modeset=1" > /etc/modprobe.d/nvidia.conf
-echo "options nvidia NVreg_PreserveVideoMemoryAllocations=1" >> /etc/modprobe.d/nvidia.conf
-echo "options nvidia NVreg_RegistryDwords=\"PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x1\"" >> /etc/modprobe.d/nvidia.conf
+# Crear directorio si no existe
+mkdir -p /etc/modprobe.d
+# Configuración de módulos NVIDIA
+cat > /etc/modprobe.d/nvidia.conf << EOF
+options nvidia-drm modeset=1
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+options nvidia NVreg_RegistryDwords="PowerMizerEnable=0x1; PerfLevelSrc=0x2222; PowerMizerLevel=0x3; PowerMizerDefault=0x3; PowerMizerDefaultAC=0x1"
+EOF
+
+# Asegurar que los módulos NVIDIA se carguen correctamente
 sed -i 's/^MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
+
+# Si no hay módulos definidos, agregarlos
+if ! grep -q "^MODULES=(nvidia" /etc/mkinitcpio.conf; then
+    sed -i 's/^MODULES=()/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)/' /etc/mkinitcpio.conf
+fi
+
+# Regenerar initramfs
 mkinitcpio -P
 print_success "NVIDIA configurado para Wayland"
 
-# --- 15) CONFIGURAR GRUB PARA DUAL BOOT ---
+# --- 15) CREAR GRUPOS NECESARIOS ---
+print_message "Creando grupos necesarios..."
+groupadd -f wheel
+groupadd -f video
+groupadd -f audio
+groupadd -f storage
+groupadd -f optical
+groupadd -f network
+groupadd -f power
+print_success "Grupos creados"
+
+# --- 16) CONFIGURAR GRUB PARA DUAL BOOT ---
 print_message "Configurando GRUB para dual boot..."
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1 amd_pstate=active"/' /etc/default/grub
+# Configurar línea de comandos del kernel
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 # Habilitar os-prober para detectar Windows
 echo "GRUB_DISABLE_OS_PROBER=false" >> /etc/default/grub
+# Instalar GRUB
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
-# Actualizar os-prober para encontrar Windows
-os-prober
+# Generar configuración de GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado para dual boot"
 
-# --- 16) CREAR USUARIO ---
+# --- 17) CREAR USUARIO ---
 print_message "Creando usuario 'antonio'..."
-# Primero aseguramos que exista el grupo wheel
-groupadd -f wheel
-# Crear el usuario
-useradd -m -G wheel,seat,video,audio,storage,optical -s /bin/bash antonio
+# Crear el usuario con los grupos correctos
+useradd -m -G wheel,video,audio,storage,optical,network,power -s /bin/bash antonio
 # Configurar contraseña
 print_message "Configura la contraseña para el usuario 'antonio':"
 passwd antonio
 
 # Configurar sudo para el grupo wheel
 print_message "Configurando privilegios sudo para el usuario 'antonio'..."
-echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
+echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
 print_success "Usuario creado con privilegios sudo"
 
-# --- 17) HABILITAR SERVICIOS ---
+# --- 18) HABILITAR SERVICIOS ---
 print_message "Habilitando servicios..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
-systemctl enable seatd
 systemctl enable fstrim.timer
 print_success "Servicios habilitados"
 
@@ -235,8 +266,8 @@ mkdir -p /etc/gtk-3.0 /etc/gtk-4.0
 cat > /etc/gtk-3.0/settings.ini << EOF
 [Settings]
 gtk-application-prefer-dark-theme=true
-gtk-theme-name=Materia-dark
-gtk-icon-theme-name=Papirus-Dark
+gtk-theme-name=Adwaita-dark
+gtk-icon-theme-name=Adwaita
 gtk-font-name=JetBrains Mono Nerd Font 11
 gtk-cursor-theme-name=Adwaita
 gtk-cursor-theme-size=24
@@ -259,17 +290,16 @@ cp /etc/gtk-3.0/settings.ini /etc/gtk-4.0/settings.ini
 cat > /etc/environment << EOF
 # Tema oscuro para Qt y GTK
 QT_QPA_PLATFORMTHEME=qt5ct
-QT_STYLE_OVERRIDE=kvantum
-GTK_THEME=Materia-dark
+GTK_THEME=Adwaita-dark
 EOF
 
 print_success "Tema oscuro configurado"
 
-# --- 20) CONFIGURAR HYPRLAND, WAYBAR Y KITTY ---
-print_message "Configurando entorno Hyprland, Waybar y Kitty..."
+# --- 20) CONFIGURAR HYPRLAND, WAYBAR Y ALACRITTY ---
+print_message "Configurando entorno Hyprland, Waybar y Alacritty..."
 
 # Crear directorios de configuración
-mkdir -p /home/antonio/.config/{hypr/scripts,waybar,kitty,qt5ct,gtk-3.0,gtk-4.0,Kvantum}
+mkdir -p /home/antonio/.config/{hypr/scripts,waybar,alacritty,qt5ct,gtk-3.0,gtk-4.0}
 mkdir -p /home/antonio/Imágenes/Capturas
 mkdir -p /home/antonio/Wallpapers
 
@@ -315,12 +345,14 @@ cat > /home/antonio/.config/hypr/hyprland.conf << EOF
 monitor=HDMI-A-1,1920x1080@144.01300,0x0,1
 monitor=eDP-1,2560x1600@165.00400,1920x0,1.6
 bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/Capturas/captura-$(date +'%Y%m%d-%H%M%S').png
+
 ###################
 ### MY PROGRAMS ###
 ###################
-\$terminal = kitty
+\$terminal = alacritty
 \$fileManager = thunar
 \$menu = rofi -show drun
+
 #################
 ### AUTOSTART ###
 #################
@@ -331,6 +363,7 @@ exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = nm-applet
 exec-once = swaync
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+
 #############################
 ### ENVIRONMENT VARIABLES ###
 #############################
@@ -342,7 +375,7 @@ env = QT_WAYLAND_DISABLE_WINDOWDECORATION,1
 env = GDK_BACKEND,wayland
 env = NVIDIA_FORCE_LOADING_X11GLX,1
 # Forzar modo oscuro
-env = GTK_THEME,Materia-dark
+env = GTK_THEME,Adwaita-dark
 # Optimizaciones para NVIDIA en Wayland
 env = LIBVA_DRIVER_NAME,nvidia
 env = __GLX_VENDOR_LIBRARY_NAME,nvidia
@@ -351,49 +384,52 @@ env = __GL_GSYNC_ALLOWED,1
 env = __GL_VRR_ALLOWED,1
 env = WLR_NO_HARDWARE_CURSORS,1
 env = WLR_DRM_NO_ATOMIC,1
+
 #####################
 ### LOOK AND FEEL ###
 #####################
 general {
     gaps_in = 2
     gaps_out = 8
-   border_size = 2
+    border_size = 2
     col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
     col.inactive_border = rgba(595959aa)
     resize_on_border = false
     allow_tearing = false
     layout = dwindle
 }
+
 decoration {
     rounding = 10
-    rounding_power = 2
     # Change transparency of focused and unfocused windows
     active_opacity = 1.0
     inactive_opacity = 1.0
-    shadow {
-        enabled = true
-        range = 4
-        render_power = 3
-        color = rgba(1a1a1aee)
-    }
+    
     blur {
         enabled = true
         size = 3
         passes = 1
         vibrancy = 0.1696
     }
+    
+    drop_shadow = true
+    shadow_range = 4
+    shadow_render_power = 3
+    col.shadow = rgba(1a1a1aee)
 }
+
 animations {
-    enabled = yes, please :)
+    enabled = yes
     bezier = easeOutQuint,0.23,1,0.32,1
     bezier = easeInOutCubic,0.65,0.05,0.36,1
     bezier = linear,0,0,1,1
     bezier = almostLinear,0.5,0.5,0.75,1.0
     bezier = quick,0.15,0,0.1,1
+    
     animation = global, 1, 10, default
     animation = border, 1, 5.39, easeOutQuint
     animation = windows, 1, 4.79, easeOutQuint
-  animation = windowsIn, 1, 4.1, easeOutQuint, popin 87%
+    animation = windowsIn, 1, 4.1, easeOutQuint, popin 87%
     animation = windowsOut, 1, 1.49, linear, popin 87%
     animation = fadeIn, 1, 1.73, almostLinear
     animation = fadeOut, 1, 1.46, almostLinear
@@ -407,22 +443,27 @@ animations {
     animation = workspacesIn, 1, 1.21, almostLinear, fade
     animation = workspacesOut, 1, 1.94, almostLinear, fade
 }
+
 dwindle {
-    pseudotile = true # Master switch for pseudotiling. Enabling is bound to mainMod + P in t>
-    preserve_split = true # You probably want this
+    pseudotile = true
+    preserve_split = true
 }
+
 master {
     new_status = master
 }
+
 misc {
-    force_default_wallpaper = 0 # Set to 0 to disable the anime mascot wallpapers
-    disable_hyprland_logo = true # Disable the hyprland logo background
-    vfr = true # Variable framerate for better performance
-    vrr = 1 # Variable refresh rate - helps prevent tearing
+    force_default_wallpaper = 0
+    disable_hyprland_logo = true
+    vfr = true
+    vrr = 1
 }
+
 xwayland {
     force_zero_scaling = true
 }
+
 #############
 ### INPUT ###
 #############
@@ -432,40 +473,47 @@ input {
     kb_model =
     kb_options = grp:alt_shift_toggle
     kb_rules =
+    
     follow_mouse = 1
-   sensitivity = 0 # -1.0 - 1.0, 0 means no modification.
+    sensitivity = 0
+    
     touchpad {
         natural_scroll = false
     }
 }
+
 gestures {
     workspace_swipe = false
 }
+
 device {
     name = epic-mouse-v1
     sensitivity = -0.5
 }
+
 ###################
 ### KEYBINDINGS ###
 ###################
-\$mainMod = SUPER # Sets "Windows" key as main modifier
-# Example binds, see https://wiki.hyprland.org/Configuring/Binds/ for more
+\$mainMod = SUPER
+
+# Aplicaciones principales
 bind = \$mainMod, Q, exec, \$terminal
 bind = \$mainMod, C, killactive,
 bind = \$mainMod, M, exit,
 bind = \$mainMod, E, exec, \$fileManager
 bind = \$mainMod, V, togglefloating,
 bind = \$mainMod, R, exec, \$menu
-bind = \$mainMod, P, pseudo, # dwindle
-bind = \$mainMod, J, togglesplit, # dwindle
-bind = \$mainMod, F, fullscreen, # Toggle fullscreen
-# Move focus with mainMod + arrow keys
+bind = \$mainMod, P, pseudo,
+bind = \$mainMod, J, togglesplit,
+bind = \$mainMod, F, fullscreen,
+
+# Movimiento del foco
 bind = \$mainMod, left, movefocus, l
 bind = \$mainMod, right, movefocus, r
 bind = \$mainMod, up, movefocus, u
 bind = \$mainMod, down, movefocus, d
 
-# Switch workspaces with mainMod + [0-9]
+# Cambio de espacios de trabajo
 bind = \$mainMod, 1, workspace, 1
 bind = \$mainMod, 2, workspace, 2
 bind = \$mainMod, 3, workspace, 3
@@ -476,7 +524,8 @@ bind = \$mainMod, 7, workspace, 7
 bind = \$mainMod, 8, workspace, 8
 bind = \$mainMod, 9, workspace, 9
 bind = \$mainMod, 0, workspace, 10
-# Move active window to a workspace with mainMod + SHIFT + [0-9]
+
+# Mover ventana activa a espacio de trabajo
 bind = \$mainMod SHIFT, 1, movetoworkspace, 1
 bind = \$mainMod SHIFT, 2, movetoworkspace, 2
 bind = \$mainMod SHIFT, 3, movetoworkspace, 3
@@ -487,55 +536,57 @@ bind = \$mainMod SHIFT, 7, movetoworkspace, 7
 bind = \$mainMod SHIFT, 8, movetoworkspace, 8
 bind = \$mainMod SHIFT, 9, movetoworkspace, 9
 bind = \$mainMod SHIFT, 0, movetoworkspace, 10
-# Example special workspace (scratchpad)
+
+# Espacio de trabajo especial (scratchpad)
 bind = \$mainMod, S, togglespecialworkspace, magic
 bind = \$mainMod SHIFT, S, movetoworkspace, special:magic
-# Scroll through existing workspaces with mainMod + scroll
+
+# Scroll a través de espacios de trabajo
 bind = \$mainMod, mouse_down, workspace, e+1
 bind = \$mainMod, mouse_up, workspace, e-1
-# Move/resize windows with mainMod + LMB/RMB and dragging
+
+# Mover/redimensionar ventanas con mouse
 bindm = \$mainMod, mouse:272, movewindow
 bindm = \$mainMod, mouse:273, resizewindow
-# Laptop multimedia keys for volume and LCD brightness
+
+# Control de volumen y brillo
 bindel = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
 bindel = ,XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
-
 bindel = ,XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
 bindel = ,XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
 bindel = ,XF86MonBrightnessUp, exec, brightnessctl s 10%+
 bindel = ,XF86MonBrightnessDown, exec, brightnessctl s 10%-
-# Media controls using playerctl
+
+# Control de medios
 bindl = , XF86AudioNext, exec, playerctl next
 bindl = , XF86AudioPause, exec, playerctl play-pause
 bindl = , XF86AudioPlay, exec, playerctl play-pause
 bindl = , XF86AudioPrev, exec, playerctl previous
-# Take screenshots
+
+# Capturas de pantalla
 bind = , Print, exec, grim -g "\$(slurp)" - | wl-copy
+
+# Cambiar fondo de pantalla
+bind = Ctrl+Super, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
+
 ##############################
 ### WINDOWS AND WORKSPACES ###
 ##############################
-# See https://wiki.hyprland.org/Configuring/Window-Rules/ for more
-# See https://wiki.hyprland.org/Configuring/Workspace-Rules/ for workspace rules
-# Example windowrule v1
-# windowrule = float, ^(kitty)\$
-# Example windowrule v2
-# windowrulev2 = float,class:^(kitty)\$,title:^(kitty)\$
-# Specific rules for installed applications
 windowrulev2 = float,class:^(pavucontrol)\$
 windowrulev2 = float,class:^(blueman-manager)\$
 windowrulev2 = float,class:^(nm-connection-editor)\$
 windowrulev2 = float,title:^(Steam - News)\$
-# Ignore maximize requests from apps. You'll probably like this.
+
+# Ignorar solicitudes de maximización
 windowrulev2 = suppressevent maximize, class:.*
-# Fix some dragging issues with XWayland
+
+# Arreglos para XWayland
 windowrulev2 = nofocus,class:^\$,title:^\$,xwayland:1,floating:1,fullscreen:0,pinned:0
-# Arreglos para VSCode y aplicaciones que se ven borrosas
+
+# Arreglos para VSCode
 windowrulev2 = opacity 1.0 override,class:^(code-oss)\$
 windowrulev2 = opacity 1.0 override,class:^(Code)\$
 EOF
-
-# Añadir tecla para cambiar el fondo
-echo "bind = Ctrl+Super, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh" >> /home/antonio/.config/hypr/hyprland.conf
 
 # Configuración exacta de Waybar (config)
 cat > /home/antonio/.config/waybar/config << EOF
@@ -602,59 +653,125 @@ cat > /home/antonio/.config/waybar/style.css << EOF
     margin: 0;
     padding: 0;
 }
+
 window#waybar {
     background: #000000;
     color: #ffffff;
 }
+
 #workspaces button {
     padding: 0 5px;
     background: transparent;
     color: #ffffff;
 }
+
 #workspaces button.active {
     color: #ffffff;
     font-weight: bold;
 }
+
 #clock {
     color: #ffffff;
     padding: 0 10px;
 }
+
 #custom-ram {
     color: #ffffff;
     padding: 0 10px;
 }
+
 #custom-cpu {
     padding: 0 10px;
 }
+
 #custom-gpu {
     padding: 0 10px;
 }
 EOF
 
-# Configuración de Kitty
-cat > /home/antonio/.config/kitty/kitty.conf << EOF
-font_family JetBrainsMono Nerd Font
-font_size 12.0
-# Fondo gris oscuro elegante
-background #2B2B2B
-# Colores básicos ajustados para modo oscuro
-color0  #3B3B3B
-color8  #555555
-# --------------------------------------
-# Funciones personalizadas (Kitty)
-# --------------------------------------
-map ctrl+c copy_to_clipboard
-map ctrl+v paste_from_clipboard
-map ctrl+k send_text all \x01\x0B
-# --------------------------------------
-# Restaurar comportamiento original (Bash)
-# --------------------------------------
-map ctrl+shift+c send_text all \x03
-map ctrl+shift+v send_text all \x16
-map ctrl+shift+k send_text all \x0B
+# Configuración de Alacritty
+cat > /home/antonio/.config/alacritty/alacritty.toml << EOF
+# Configuración completa de Alacritty para Hyprland
+
+[window]
+# Configuración de ventana
+opacity = 0.95
+dynamic_padding = true
+decorations = "none"
+
+[window.padding]
+x = 10
+y = 10
+
+[font]
+# Fuente principal
+normal = { family = "JetBrainsMono Nerd Font", style = "Regular" }
+bold = { family = "JetBrainsMono Nerd Font", style = "Bold" }
+italic = { family = "JetBrainsMono Nerd Font", style = "Italic" }
+bold_italic = { family = "JetBrainsMono Nerd Font", style = "Bold Italic" }
+size = 12.0
+
+[colors]
+# Tema oscuro elegante
+[colors.primary]
+background = "#2B2B2B"
+foreground = "#CCCCCC"
+
+[colors.normal]
+black = "#3B3B3B"
+red = "#CF6A4C"
+green = "#8F9D6A"
+yellow = "#F9EE98"
+blue = "#7587A6"
+magenta = "#9B859D"
+cyan = "#AFC4DB"
+white = "#A7A7A7"
+
+[colors.bright]
+black = "#555555"
+red = "#CF6A4C"
+green = "#8F9D6A"
+yellow = "#F9EE98"
+blue = "#7587A6"
+magenta = "#9B859D"
+cyan = "#AFC4DB"
+white = "#FFFFFF"
+
+[cursor]
+style = { shape = "Block", blinking = "On" }
+vi_mode_style = { shape = "Block", blinking = "Off" }
+
+[shell]
+program = "/bin/bash"
+args = ["--login"]
+
+[env]
+# Variables de entorno importantes para Wayland
+TERM = "xterm-256color"
+
+[keyboard]
+# Atajos de teclado para mantener la funcionalidad de Kitty
+bindings = [
+    # Funciones básicas de copiado y pegado
+    { key = "C", mods = "Control", action = "Copy" },
+    { key = "V", mods = "Control", action = "Paste" },
+    
+    # Control de zoom
+    { key = "Plus", mods = "Control", action = "IncreaseFontSize" },
+    { key = "Minus", mods = "Control", action = "DecreaseFontSize" },
+    { key = "Key0", mods = "Control", action = "ResetFontSize" },
+    
+    # Funciones adicionales (comportamiento original de Bash)
+    { key = "C", mods = "Control|Shift", chars = "\u0003" },  # Ctrl+Shift+C envía Ctrl+C
+    { key = "V", mods = "Control|Shift", chars = "\u0016" },  # Ctrl+Shift+V envía Ctrl+V
+    { key = "K", mods = "Control|Shift", chars = "\u000b" },  # Ctrl+Shift+K envía Ctrl+K
+    
+    # Clear screen con Ctrl+K (como en Kitty)
+    { key = "K", mods = "Control", chars = "\u0001\u000b" },
+]
 EOF
 
-# Configure autostart para que se inicie automáticamente al iniciar sesión
+# Configurar autostart para que se inicie automáticamente al iniciar sesión
 mkdir -p /home/antonio/.config/autostart
 cat > /home/antonio/.config/autostart/hyprland.desktop << EOF
 [Desktop Entry]
@@ -663,27 +780,77 @@ Name=Hyprland
 Exec=/usr/bin/Hyprland
 EOF
 
-# Recomendaciones para post-instalación (solucionar problemas con aplicaciones borrosas)
+# Configuración adicional de Bash para Alacritty
+cat > /home/antonio/.bashrc << 'EOF'
+# .bashrc
+
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+# Configuración de alias
+alias ls='ls --color=auto'
+alias ll='ls -la'
+alias grep='grep --color=auto'
+
+# Configuración del prompt
+PS1='[\u@\h \W]\$ '
+
+# Variables de entorno para desarrollo
+export EDITOR=nvim
+export VISUAL=nvim
+
+# Configuración para lenguajes de programación
+export PATH="$PATH:$HOME/.cargo/bin"
+export PATH="$PATH:/usr/lib/jvm/default/bin"
+export PATH="$PATH:$HOME/go/bin"
+
+# Inicializar Rust si está instalado
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+EOF
+
+# Recomendaciones para post-instalación
 cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOF'
 === RECOMENDACIONES POST-INSTALACIÓN ===
 
-Para instalar Visual Studio Code y que se vea correctamente en tus monitores:
+Para instalar Visual Studio Code y herramientas adicionales:
 
-1. Instalar yay:
-sudo pacman -S --needed git base-devel
-git clone https://aur.archlinux.org/yay.git
-cd yay
-makepkg -si
+1. Instalar yay (AUR helper):
+   sudo pacman -S --needed git base-devel
+   git clone https://aur.archlinux.org/yay.git
+   cd yay
+   makepkg -si
 
-2. Instalar Visual Studio Code
-yay -S visual-studio-code-bin
+2. Instalar Visual Studio Code:
+   yay -S visual-studio-code-bin
 
-3. Instalar Rust
-sudo pacman -S rustup
-rustup default stable
+3. Configurar Rust correctamente:
+   rustup default stable
 
-4. Instalar Tauri
-sudo npm install -g @tauri-apps/cli
+4. Para proyectos con Tauri:
+   sudo npm install -g @tauri-apps/cli
+
+5. Verificar instalación de lenguajes:
+   - PHP: php --version
+   - SQLite: sqlite3 --version
+   - Go: go version
+   - Java: java --version
+   - Swift: swift --version
+   - Lua: lua -v
+   - Python: python --version
+   - Kotlin: kotlin -version
+   - C/C++: gcc --version && g++ --version
+   - C#: dotnet --version
+   - Rust: rustc --version
+   - JavaScript/TypeScript: node --version && tsc --version
+
+NOTAS IMPORTANTES:
+- Alacritty está configurado con los mismos atajos que tenías en Kitty
+- Ctrl+C/V funcionan para copiar/pegar
+- Ctrl+K limpia la pantalla
+- Ctrl+Shift+C/V/K envían las señales originales de Bash
+- Para cambiar entre teclado US y ES: Alt+Shift
+- Para cambiar fondo de pantalla: Ctrl+Super+T
+- Para captura de pantalla: Tecla Print o Super+Z
 
 EOF
 
@@ -698,7 +865,6 @@ print_message "3. Si seleccionas Arch, inicia sesión como 'antonio'"
 print_message "4. Conecta a Internet con 'nmtui' si es necesario"
 print_message "5. Revisa el archivo ~/recomendaciones-post-instalacion.txt para más información"
 print_message "6. Para cambiar entre teclado en inglés (US) y español, usa Alt+Shift"
-print_message "7. Para hacer backups manuales, usa Timeshift"
 EOL
 
 # Hacer ejecutable el script post-chroot
