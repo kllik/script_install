@@ -12,11 +12,11 @@
 
 # Colores para mensajes
 
-GREEN=$’\033[0;32m’
-BLUE=$’\033[0;34m’
-RED=$’\033[0;31m’
-YELLOW=$’\033[0;33m’
-NC=$’\033[0m’ # No Color
+GREEN=’\033[0;32m’
+BLUE=’\033[0;34m’
+RED=’\033[0;31m’
+YELLOW=’\033[0;33m’
+NC=’\033[0m’ # No Color
 
 # Función para mostrar mensajes
 
@@ -51,9 +51,9 @@ SWAP_DEV=”${DISK}p2”    # Partición 2: Linux swap (16GB)
 EFI_DEV=”${DISK}p3”     # Partición 3: EFI System (1GB)
 
 print_message “Dispositivos a utilizar:”
-print_message “Partición Sistema (BTRFS): $SYSTEM_DEV (935GB)”
-print_message “Partición SWAP: $SWAP_DEV (16GB)”
-print_message “Partición EFI: $EFI_DEV (1GB)”
+print_message “Partición Sistema BTRFS: $SYSTEM_DEV - 935GB”
+print_message “Partición SWAP: $SWAP_DEV - 16GB”
+print_message “Partición EFI: $EFI_DEV - 1GB”
 print_warning “Este script asume que ya creaste las particiones con cfdisk”
 print_warning “Asegúrate de que las particiones existan y sean correctas”
 echo
@@ -108,10 +108,10 @@ cat > /mnt/root/post-chroot.sh << ‘EOL’
 
 # Colores para mensajes
 
-GREEN=$’\033[0;32m’
-BLUE=$’\033[0;34m’
-RED=$’\033[0;31m’
-NC=$’\033[0m’ # No Color
+GREEN=’\033[0;32m’
+BLUE=’\033[0;34m’
+RED=’\033[0;31m’
+NC=’\033[0m’ # No Color
 
 # Función para mostrar mensajes
 
