@@ -177,7 +177,7 @@ print_success "Configuración de NVIDIA preparada."
 
 # --- 16) INSTALAR HYPRLAND Y COMPONENTES DE ESCRITORIO ---
 print_message "Instalando Hyprland y componentes de escritorio..."
-pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland xorg-xwayland waybar wofi alacritty polkit polkit-gnome xdg-desktop-portal-gtk pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber grim slurp wl-clipboard brightnessctl playerctl thunar thunar-archive-plugin gvfs udisks2 hyprpaper hyprlock hypridle swaync network-manager-applet blueman pavucontrol
+pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland xorg-xwayland waybar wofi alacritty polkit polkit-gnome xdg-desktop-portal-gtk pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber grim slurp wl-clipboard brightnessctl playerctl thunar thunar-archive-plugin gvfs udisks2 hyprpaper hyprlock hypridle swaync network-manager-applet blueman pavucontrol lm_sensors
 print_success "Hyprland y componentes instalados."
 
 # --- 17) INSTALAR APLICACIONES ---
@@ -316,16 +316,19 @@ cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
 # wallpaper = eDP-1,/home/antonio/Wallpapers/tu-imagen.jpg
 EOF
 
-# Configuración de Hyprland
-cat > /home/antonio/.config/hypr/hyprland.conf << EOF
+# Configuración de Hyprland (CORREGIDA)
+cat > /home/antonio/.config/hypr/hyprland.conf << 'EOHYPR'
+# Hyprland configuration file - Complete and production-ready configuration
+# This file manages the complete Hyprland window manager configuration
+
 # --- MONITORS ---
-monitor=HDMI-A-1,1920x1080@144,0x0,1
-monitor=eDP-1,2560x1600@165,1920x0,1.6
+monitor=eDP-1,2560x1600@165,0x0,1.6
+monitor=HDMI-A-1,1920x1080@144,1600x0,1
 
 # --- PROGRAMS ---
-\$terminal = alacritty
-\$fileManager = thunar
-\$menu = wofi --show drun
+$terminal = alacritty
+$fileManager = thunar
+$menu = wofi --show drun
 
 # --- AUTOSTART ---
 exec-once = waybar
@@ -350,7 +353,7 @@ env = GBM_BACKEND,nvidia-drm
 env = __GL_GSYNC_ALLOWED,1
 env = __GL_VRR_ALLOWED,1
 env = WLR_NO_HARDWARE_CURSORS,1
-env = WLR_DRM_NO_ATOMIC,1 # Puede ser necesario para algunas configuraciones
+env = WLR_DRM_NO_ATOMIC,1
 
 # --- LOOK AND FEEL ---
 general {
@@ -363,21 +366,27 @@ general {
     allow_tearing = false
     layout = dwindle
 }
+
 decoration {
     rounding = 10
     active_opacity = 1.0
     inactive_opacity = 1.0
+    
     blur {
         enabled = true
         size = 3
         passes = 1
         vibrancy = 0.1696
     }
-    drop_shadow = true
-    shadow_range = 4
-    shadow_render_power = 3
-    col.shadow = rgba(1a1a1aee)
+    
+    shadow {
+        enabled = true
+        range = 4
+        render_power = 3
+        color = rgba(1a1a1aee)
+    }
 }
+
 animations {
     enabled = yes
     bezier = myBezier, 0.05, 0.9, 0.1, 1.05
@@ -387,19 +396,23 @@ animations {
     animation = fade, 1, 7, default
     animation = workspaces, 1, 6, default
 }
+
 dwindle {
     pseudotile = true
     preserve_split = true
 }
+
 master {
-    new_is_master = true
+    new_status = master
 }
+
 misc {
     force_default_wallpaper = 0
     disable_hyprland_logo = true
     vfr = true
     vrr = 1
 }
+
 xwayland {
     force_zero_scaling = true
 }
@@ -410,79 +423,91 @@ input {
     kb_options = grp:alt_shift_toggle
     follow_mouse = 1
     sensitivity = 0
+    
     touchpad {
         natural_scroll = false
     }
 }
-gestures {
-    workspace_swipe = false
-}
+
 device {
     name = epic-mouse-v1
     sensitivity = -0.5
 }
 
 # --- KEYBINDINGS ---
-\$mainMod = SUPER
-bind = \$mainMod, Q, exec, \$terminal
-bind = \$mainMod, C, killactive,
-bind = \$mainMod, M, exit,
-bind = \$mainMod, E, exec, \$fileManager
-bind = \$mainMod, V, togglefloating,
-bind = \$mainMod, R, exec, \$menu
-bind = \$mainMod, P, pseudo,
-bind = \$mainMod, J, togglesplit,
-bind = \$mainMod, F, fullscreen,
+$mainMod = SUPER
 
-bind = \$mainMod, left, movefocus, l
-bind = \$mainMod, right, movefocus, r
-bind = \$mainMod, up, movefocus, u
-bind = \$mainMod, down, movefocus, d
+# Application launchers
+bind = $mainMod, Q, exec, $terminal
+bind = $mainMod, C, killactive,
+bind = $mainMod, M, exit,
+bind = $mainMod, E, exec, $fileManager
+bind = $mainMod, V, togglefloating,
+bind = $mainMod, R, exec, $menu
+bind = $mainMod, P, pseudo,
+bind = $mainMod, J, togglesplit,
+bind = $mainMod, F, fullscreen,
 
-bind = \$mainMod, 1, workspace, 1
-bind = \$mainMod, 2, workspace, 2
-bind = \$mainMod, 3, workspace, 3
-bind = \$mainMod, 4, workspace, 4
-bind = \$mainMod, 5, workspace, 5
-bind = \$mainMod, 6, workspace, 6
-bind = \$mainMod, 7, workspace, 7
-bind = \$mainMod, 8, workspace, 8
-bind = \$mainMod, 9, workspace, 9
-bind = \$mainMod, 0, workspace, 10
+# Focus movement
+bind = $mainMod, left, movefocus, l
+bind = $mainMod, right, movefocus, r
+bind = $mainMod, up, movefocus, u
+bind = $mainMod, down, movefocus, d
 
-bind = \$mainMod SHIFT, 1, movetoworkspace, 1
-bind = \$mainMod SHIFT, 2, movetoworkspace, 2
-bind = \$mainMod SHIFT, 3, movetoworkspace, 3
-bind = \$mainMod SHIFT, 4, movetoworkspace, 4
-bind = \$mainMod SHIFT, 5, movetoworkspace, 5
-bind = \$mainMod SHIFT, 6, movetoworkspace, 6
-bind = \$mainMod SHIFT, 7, movetoworkspace, 7
-bind = \$mainMod SHIFT, 8, movetoworkspace, 8
-bind = \$mainMod SHIFT, 9, movetoworkspace, 9
-bind = \$mainMod SHIFT, 0, movetoworkspace, 10
+# Workspace switching
+bind = $mainMod, 1, workspace, 1
+bind = $mainMod, 2, workspace, 2
+bind = $mainMod, 3, workspace, 3
+bind = $mainMod, 4, workspace, 4
+bind = $mainMod, 5, workspace, 5
+bind = $mainMod, 6, workspace, 6
+bind = $mainMod, 7, workspace, 7
+bind = $mainMod, 8, workspace, 8
+bind = $mainMod, 9, workspace, 9
+bind = $mainMod, 0, workspace, 10
 
-bind = \$mainMod, S, togglespecialworkspace, magic
-bind = \$mainMod SHIFT, S, movetoworkspace, special:magic
+# Move window to workspace
+bind = $mainMod SHIFT, 1, movetoworkspace, 1
+bind = $mainMod SHIFT, 2, movetoworkspace, 2
+bind = $mainMod SHIFT, 3, movetoworkspace, 3
+bind = $mainMod SHIFT, 4, movetoworkspace, 4
+bind = $mainMod SHIFT, 5, movetoworkspace, 5
+bind = $mainMod SHIFT, 6, movetoworkspace, 6
+bind = $mainMod SHIFT, 7, movetoworkspace, 7
+bind = $mainMod SHIFT, 8, movetoworkspace, 8
+bind = $mainMod SHIFT, 9, movetoworkspace, 9
+bind = $mainMod SHIFT, 0, movetoworkspace, 10
 
-bind = \$mainMod, mouse_down, workspace, e+1
-bind = \$mainMod, mouse_up, workspace, e-1
+# Special workspace
+bind = $mainMod, S, togglespecialworkspace, magic
+bind = $mainMod SHIFT, S, movetoworkspace, special:magic
 
-bindm = \$mainMod, mouse:272, movewindow
-bindm = \$mainMod, mouse:273, resizewindow
+# Mouse workspace switching
+bind = $mainMod, mouse_down, workspace, e+1
+bind = $mainMod, mouse_up, workspace, e-1
 
+# Mouse window manipulation
+bindm = $mainMod, mouse:272, movewindow
+bindm = $mainMod, mouse:273, resizewindow
+
+# Volume controls
 binde = , XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+
 binde = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
 bind = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
 bind = , XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+
+# Brightness controls
 binde = , XF86MonBrightnessUp, exec, brightnessctl s 10%+
 binde = , XF86MonBrightnessDown, exec, brightnessctl s 10%-
 
+# Media controls
 bindl = , XF86AudioNext, exec, playerctl next
 bindl = , XF86AudioPrev, exec, playerctl previous
 bindl = , XF86AudioPlay, exec, playerctl play-pause
 
-bind = , Print, exec, grim -g "\$(slurp)" - | wl-copy
-bind = SUPER, Z, exec, grim -g "\$(slurp)" ~/Imágenes/Capturas/captura-\$(date +'\%Y\%m\%d-\%H\%M\%S').png
+# Screenshots
+bind = , Print, exec, grim -g "$(slurp)" - | wl-copy
+bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/Capturas/captura-$(date +'%Y-%m-%d-%H%M%S').png
 bind = SUPER_CTRL, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
 
 # --- WINDOW RULES ---
@@ -492,126 +517,333 @@ windowrulev2 = float,class:^(nm-connection-editor)$
 windowrulev2 = float,title:^(Steam - News)$
 windowrulev2 = suppressevent maximize, class:.*
 windowrulev2 = opacity 1.0 override,class:^(code-oss|Code)$
-EOF
+EOHYPR
 
-# Configuración de Waybar (config.jsonc)
-cat > /home/antonio/.config/waybar/config.jsonc << EOF
+# Configuración de Waybar (config.jsonc) - ACTUALIZADA
+cat > /home/antonio/.config/waybar/config.jsonc << 'EOWAYBAR'
 {
     "layer": "top",
     "position": "top",
-    "height": 30,
-    "spacing": 4,
+    "height": 28,
+    "spacing": 0,
     "modules-left": ["hyprland/workspaces"],
-    "modules-center": ["clock"],
-    "modules-right": ["pulseaudio", "network", "cpu", "memory", "custom/gpu", "tray"],
+    "modules-center": [],
+    "modules-right": ["custom/cpu", "custom/gpu", "custom/ram", "battery", "network", "bluetooth", "clock"],
+    
     "hyprland/workspaces": {
-        "format": "{icon}",
-        "format-icons": {
-            "1": "", "2": "", "3": "", "4": "", "5": "",
-            "active": "",
-            "default": ""
-        }
+        "format": "{id}",
+        "on-click": "activate",
+        "sort-by-number": true
     },
-    "tray": { "spacing": 10 },
-    "clock": {
-        "format": " {:%H:%M}",
-        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    
+    "custom/cpu": {
+        "exec": "echo \"CPU: $(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf \"%.0f%%\", usage}') $(sensors 2>/dev/null | grep 'Package' | awk '{print $4}' | sed 's/+//' | sed 's/\\..*°C/°C/' | head -1 || echo '')\"",
+        "interval": 2,
+        "tooltip": false,
+        "format": "{}"
     },
-    "cpu": {
-        "format": " {usage}%",
-        "tooltip": true
-    },
-    "memory": {
-        "format": " {}%"
-    },
+    
     "custom/gpu": {
-        "format": "GPU {load}%",
-        "exec": "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits",
-        "interval": 1
+        "exec": "echo \"GPU: $(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 'N/A')% $(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print $1\"°C\"}' || echo '')\"",
+        "interval": 2,
+        "tooltip": false,
+        "format": "{}"
     },
-    "pulseaudio": {
-        "format": "{icon} {volume}%",
-        "format-muted": "",
-        "format-icons": {
-            "headphone": "",
-            "hands-free": "",
-            "headset": "",
-            "phone": "",
-            "portable": "",
-            "car": "",
-            "default": ["", ""]
-        }
+    
+    "custom/ram": {
+        "exec": "echo \"RAM: $(free -h | awk '/^Mem:/ {print $3}' | sed 's/Gi/G/')\"",
+        "interval": 2,
+        "tooltip": false,
+        "format": "{}"
     },
+    
+    "battery": {
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "BAT: {capacity}%",
+        "format-charging": "CHG: {capacity}%",
+        "format-plugged": "AC: {capacity}%",
+        "tooltip": false
+    },
+    
     "network": {
-        "format-wifi": "{essid} ({signalStrength}%) ",
-        "format-ethernet": "{ifname}: {ipaddr}/{cidr} ",
-        "format-disconnected": "Disconnected ⚠"
+        "format-wifi": "WiFi: {signalStrength}%",
+        "format-ethernet": "LAN: OK",
+        "format-disconnected": "NET: OFF",
+        "tooltip": false,
+        "on-click": "nm-connection-editor"
+    },
+    
+    "bluetooth": {
+        "format": "BT: ON",
+        "format-on": "BT: ON",
+        "format-off": "BT: OFF",
+        "format-connected": "BT: {num_connections}",
+        "format-disabled": "BT: DIS",
+        "tooltip": false,
+        "on-click": "blueman-manager"
+    },
+    
+    "clock": {
+        "format": "{:%H:%M}",
+        "tooltip": true,
+        "tooltip-format": "<tt><small>{calendar}</small></tt>",
+        "calendar": {
+            "mode": "month",
+            "mode-mon-col": 3,
+            "weeks-pos": "left",
+            "on-scroll": 1,
+            "format": {
+                "months": "<span color='#ffffff'><b>{}</b></span>",
+                "days": "<span color='#ffffff'><b>{}</b></span>",
+                "weeks": "<span color='#999999'><b>W{}</b></span>",
+                "weekdays": "<span color='#cccccc'><b>{}</b></span>",
+                "today": "<span color='#888888'><b><u>{}</u></b></span>"
+            }
+        }
     }
 }
-EOF
+EOWAYBAR
 
-# Configuración de Waybar (style.css)
-cat > /home/antonio/.config/waybar/style.css << EOF
+# Configuración de Waybar (style.css) - ACTUALIZADA
+cat > /home/antonio/.config/waybar/style.css << 'EOWAYBARSTYLE'
+/* Waybar Minimal Dark Style - Simple White Text */
+
 * {
-    font-family: "JetBrains Mono Nerd Font", "Font Awesome 6 Free";
-    font-size: 16px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    font-weight: 400;
     border: none;
     border-radius: 0;
     min-height: 0;
-    margin: 2px;
+    margin: 0;
+    padding: 0;
 }
 
 window#waybar {
-    background: rgba(0, 0, 0, 0.5);
+    background-color: rgba(30, 30, 35, 0.95);
     color: #ffffff;
+    transition: none;
+}
+
+/* Workspaces */
+#workspaces {
+    margin: 0;
+    padding: 0 4px;
 }
 
 #workspaces button {
-    padding: 0 5px;
     background: transparent;
-    color: #ffffff;
+    color: #888888;
+    padding: 0 8px;
+    margin: 0 3px;
+    min-width: 26px;
+    font-weight: 500;
+}
+
+#workspaces button.visible {
+    color: #c0c0c0;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 #workspaces button.active {
-    color: #33ccff;
+    color: #ffffff;
+    background: rgba(150, 150, 150, 0.3);
+    font-weight: bold;
 }
 
-#clock, #pulseaudio, #network, #cpu, #memory, #custom-gpu, #tray {
+#workspaces button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+/* All right modules - White color */
+#custom-cpu,
+#custom-gpu,
+#custom-ram,
+#battery,
+#network,
+#bluetooth,
+#clock {
     color: #ffffff;
     padding: 0 10px;
+    margin: 0;
+    font-family: "JetBrains Mono", monospace;
 }
-EOF
 
-# Configuración de Alacritty (alacritty.toml)
-cat > /home/antonio/.config/alacritty/alacritty.toml << EOF
+/* Add subtle separators */
+#custom-gpu {
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    margin-left: 2px;
+}
+
+#custom-ram {
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    margin-left: 2px;
+}
+
+#battery {
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    margin-left: 2px;
+}
+
+/* Clock */
+#clock {
+    padding-right: 10px;
+    font-weight: 500;
+}
+
+/* Hover effects */
+#custom-cpu:hover,
+#custom-gpu:hover,
+#custom-ram:hover,
+#battery:hover,
+#network:hover,
+#bluetooth:hover,
+#clock:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Tooltip styling */
+tooltip {
+    background: rgba(20, 20, 25, 0.98);
+    border: 1px solid rgba(150, 150, 150, 0.3);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+tooltip label {
+    color: #ffffff;
+    font-size: 11px;
+}
+
+/* Calendar in tooltip */
+tooltip calendar {
+    background: transparent;
+    color: #ffffff;
+}
+EOWAYBARSTYLE
+
+# Configuración de Alacritty (CORREGIDA)
+cat > /home/antonio/.config/alacritty/alacritty.toml << 'EOALAC'
+# Alacritty Terminal Configuration - Final Version with Blue Selection
+# This configuration provides a complete terminal setup with warm gray background and custom shortcuts
+
 [window]
 opacity = 0.95
 dynamic_padding = true
 decorations = "none"
+startup_mode = "Windowed"
+dynamic_title = true
+
 [window.padding]
 x = 10
 y = 10
+
+[window.dimensions]
+columns = 120
+lines = 30
+
+[scrolling]
+history = 10000
+multiplier = 3
 
 [font]
 normal = { family = "JetBrainsMono Nerd Font", style = "Regular" }
 bold = { family = "JetBrainsMono Nerd Font", style = "Bold" }
 italic = { family = "JetBrainsMono Nerd Font", style = "Italic" }
+bold_italic = { family = "JetBrainsMono Nerd Font", style = "Bold Italic" }
 size = 12.0
 
+[font.offset]
+x = 0
+y = 0
+
+[font.glyph_offset]
+x = 0
+y = 0
+
+# Warm gray background with White Text and Soft Yellow for Warnings
 [colors.primary]
-background = "#1e1e2e"
-foreground = "#cdd6f4"
+background = "#2b2b2b"
+foreground = "#ffffff"
+dim_foreground = "#f8f8f2"
+bright_foreground = "#ffffff"
+
+[colors.cursor]
+text = "#2b2b2b"
+cursor = "#f8f8f2"
+
+[colors.vi_mode_cursor]
+text = "#2b2b2b"
+cursor = "#f8f8f2"
+
+[colors.search]
+matches = { foreground = "#2b2b2b", background = "#e6db74" }
+focused_match = { foreground = "#2b2b2b", background = "#a6e22e" }
+
+[colors.hints]
+start = { foreground = "#2b2b2b", background = "#e6db74" }
+end = { foreground = "#2b2b2b", background = "#a6e22e" }
+
+[colors.line_indicator]
+foreground = "None"
+background = "None"
+
+[colors.footer_bar]
+foreground = "#ffffff"
+background = "#2b2b2b"
+
+[colors.selection]
+text = "#ffffff"
+background = "#4169e1"
+
+# Normal colors - Warm gray background palette with soft yellow for errors
 [colors.normal]
-black = "#45475a";  red = "#f38ba8";    green = "#a6e3a1";
-yellow = "#f9e2af"; blue = "#89b4fa";   magenta = "#f5c2e7";
-cyan = "#94e2d5";   white = "#bac2de";
+black = "#2b2b2b"
+red = "#e6db74"      # Soft yellow for errors/warnings instead of red
+green = "#a6e22e"
+yellow = "#f4bf75"   # Brighter yellow
+blue = "#66d9ef"
+magenta = "#ae81ff"
+cyan = "#66d9ef"
+white = "#ffffff"
+
+# Bright colors
 [colors.bright]
-black = "#585b70";  red = "#f38ba8";    green = "#a6e3a1";
-yellow = "#f9e2af"; blue = "#89b4fa";   magenta = "#f5c2e7";
-cyan = "#94e2d5";   white = "#a6adc8";
+black = "#75715e"
+red = "#f4bf75"      # Soft yellow for bright errors
+green = "#a6e22e"
+yellow = "#fcf5ae"   # Even brighter yellow
+blue = "#66d9ef"
+magenta = "#ae81ff"
+cyan = "#a1efe4"
+white = "#ffffff"
+
+# Dim colors
+[colors.dim]
+black = "#2b2b2b"
+red = "#d4c96e"      # Dimmed yellow
+green = "#87c22f"
+yellow = "#c7b55a"
+blue = "#55b3cc"
+magenta = "#9869d0"
+cyan = "#55b3cc"
+white = "#d5d5d0"
 
 [cursor]
 style = { shape = "Block", blinking = "On" }
+unfocused_hollow = true
+thickness = 0.15
+
+[cursor.vi_mode_style]
+shape = "Block"
+blinking = "Off"
+
+[terminal]
+osc52 = "OnlyCopy"
 
 [shell]
 program = "/bin/bash"
@@ -620,15 +852,128 @@ args = ["--login"]
 [env]
 TERM = "xterm-256color"
 
+# Inverted keyboard shortcuts as requested
+[[keyboard.bindings]]
+key = "C"
+mods = "Control"
+action = "Copy"
+
 [[keyboard.bindings]]
 key = "V"
-mods = "Control|Shift"
+mods = "Control"
 action = "Paste"
+
 [[keyboard.bindings]]
 key = "C"
 mods = "Control|Shift"
-action = "Copy"
-EOF
+chars = "\u0003"  # Send interrupt signal (Ctrl+C)
+
+[[keyboard.bindings]]
+key = "V"
+mods = "Control|Shift"
+action = "PasteSelection"
+
+[[keyboard.bindings]]
+key = "Insert"
+mods = "Shift"
+action = "PasteSelection"
+
+[[keyboard.bindings]]
+key = "Key0"
+mods = "Control"
+action = "ResetFontSize"
+
+[[keyboard.bindings]]
+key = "Equals"
+mods = "Control"
+action = "IncreaseFontSize"
+
+[[keyboard.bindings]]
+key = "Plus"
+mods = "Control"
+action = "IncreaseFontSize"
+
+[[keyboard.bindings]]
+key = "NumpadAdd"
+mods = "Control"
+action = "IncreaseFontSize"
+
+[[keyboard.bindings]]
+key = "Minus"
+mods = "Control"
+action = "DecreaseFontSize"
+
+[[keyboard.bindings]]
+key = "NumpadSubtract"
+mods = "Control"
+action = "DecreaseFontSize"
+
+[[keyboard.bindings]]
+key = "L"
+mods = "Control"
+action = "ClearLogNotice"
+
+[[keyboard.bindings]]
+key = "L"
+mods = "Control|Shift"
+action = "ClearHistory"
+
+[[keyboard.bindings]]
+key = "PageUp"
+mods = "Shift"
+mode = "~Alt"
+action = "ScrollPageUp"
+
+[[keyboard.bindings]]
+key = "PageDown"
+mods = "Shift"
+mode = "~Alt"
+action = "ScrollPageDown"
+
+[[keyboard.bindings]]
+key = "Home"
+mods = "Shift"
+mode = "~Alt"
+action = "ScrollToTop"
+
+[[keyboard.bindings]]
+key = "End"
+mods = "Shift"
+mode = "~Alt"
+action = "ScrollToBottom"
+
+[[keyboard.bindings]]
+key = "N"
+mods = "Control|Shift"
+action = "SpawnNewInstance"
+
+[[keyboard.bindings]]
+key = "Space"
+mods = "Control|Shift"
+action = "ToggleViMode"
+
+[[keyboard.bindings]]
+key = "F11"
+action = "ToggleFullscreen"
+
+[mouse]
+hide_when_typing = true
+
+[selection]
+semantic_escape_chars = ",│`|:\"' ()[]{}<>\t"
+save_to_clipboard = false
+
+[bell]
+animation = "Linear"
+duration = 0
+command = "None"
+
+[debug]
+render_timer = false
+persistent_logging = false
+log_level = "Warn"
+print_events = false
+EOALAC
 
 # Configuración de Wofi
 cat > /home/antonio/.config/wofi/config << EOF
@@ -730,6 +1075,10 @@ cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOTXT'
 3. Configurar Rust:
    rustup default stable
 
+4. Configurar sensores de temperatura (para CPU):
+   sudo sensors-detect
+   # Responder YES a todas las preguntas seguras
+
 NOTAS IMPORTANTES:
 - Cambiar entre teclado US y ES: Alt+Shift
 - Cambiar fondo de pantalla: Ctrl+Super+T
@@ -765,4 +1114,3 @@ print_message "umount -R /mnt"
 print_message "reboot"
 echo
 print_warning "Recuerda retirar el medio de instalación durante el reinicio."
-
