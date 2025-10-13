@@ -2,7 +2,6 @@
 
 # === SCRIPT DE INSTALACIÓN DE ARCH LINUX CON BTRFS, HYPRLAND Y WAYBAR ===
 # Configuración para: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
-# Autor: Antonio
 # Uso: Este script continúa la instalación DESPUÉS de usar cfdisk para crear las particiones
 # Configuración: Single boot - Solo Arch Linux (sin snapshots/puntos de recuperación)
 
@@ -182,7 +181,7 @@ print_success "Hyprland y componentes instalados."
 
 # --- 17) INSTALAR APLICACIONES ---
 print_message "Instalando aplicaciones..."
-pacman -S --noconfirm firefox discord steam obs-studio neovim tmux btop fastfetch libreoffice-fresh imv mpv zathura zathura-pdf-mupdf unzip wget curl
+pacman -S --noconfirm firefox discord steam obs-studio neovim tmux btop unzip wget curl
 print_success "Aplicaciones instaladas."
 
 # --- 18) INSTALAR FUENTES ---
@@ -192,7 +191,7 @@ print_success "Fuentes instaladas."
 
 # --- 19) INSTALAR HERRAMIENTAS DE DESARROLLO ---
 print_message "Instalando herramientas de desarrollo..."
-pacman -S --noconfirm gcc clang cmake ninja meson gdb lldb python python-pip nodejs npm go rust rustup jdk-openjdk dotnet-sdk php sqlite lua typescript ruby rubygems kotlin
+pacman -S --noconfirm gcc clang cmake ninja meson gdb lldb python python-pip nodejs npm jdk-openjdk sqlite lua typescript
 print_success "Herramientas de desarrollo instaladas."
 
 # --- 20) INSTALAR TEMAS Y CONFIGURACIÓN GTK/QT ---
