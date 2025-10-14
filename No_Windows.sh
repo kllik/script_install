@@ -320,9 +320,13 @@ cat > /home/antonio/.config/hypr/hyprland.conf << 'EOHYPR'
 # Hyprland configuration file - Complete and production-ready configuration
 # This file manages the complete Hyprland window manager configuration
 
+
 # --- MONITORS ---
+# Monitor ASUS 2K - Configuración óptima: 2K@144Hz con escala 1.25
+monitor=HDMI-A-1,2560x1440@144,-2048x0,1.25
+
+# Laptop eDP-1 a la derecha
 monitor=eDP-1,2560x1600@165,0x0,1.6
-monitor=HDMI-A-1,1920x1080@144,1600x0,1
 
 # --- PROGRAMS ---
 $terminal = alacritty
@@ -370,14 +374,14 @@ decoration {
     rounding = 10
     active_opacity = 1.0
     inactive_opacity = 1.0
-    
+
     blur {
         enabled = true
         size = 3
         passes = 1
         vibrancy = 0.1696
     }
-    
+
     shadow {
         enabled = true
         range = 4
@@ -422,7 +426,7 @@ input {
     kb_options = grp:alt_shift_toggle
     follow_mouse = 1
     sensitivity = 0
-    
+
     touchpad {
         natural_scroll = false
     }
@@ -444,14 +448,26 @@ bind = $mainMod, E, exec, $fileManager
 bind = $mainMod, V, togglefloating,
 bind = $mainMod, R, exec, $menu
 bind = $mainMod, P, pseudo,
-bind = $mainMod, J, togglesplit,
+bind = $mainMod, T, togglesplit,
 bind = $mainMod, F, fullscreen,
 
-# Focus movement
-bind = $mainMod, left, movefocus, l
-bind = $mainMod, right, movefocus, r
-bind = $mainMod, up, movefocus, u
-bind = $mainMod, down, movefocus, d
+# Focus movement (VIM style)
+bind = $mainMod, h, movefocus, l
+bind = $mainMod, l, movefocus, r
+bind = $mainMod, k, movefocus, u
+bind = $mainMod, j, movefocus, d
+
+# Move windows (VIM style)
+bind = $mainMod SHIFT, h, movewindow, l
+bind = $mainMod SHIFT, l, movewindow, r
+bind = $mainMod SHIFT, k, movewindow, u
+bind = $mainMod SHIFT, j, movewindow, d
+
+# Resize windows (VIM style)
+bind = $mainMod CTRL, h, resizeactive, -40 0
+bind = $mainMod CTRL, l, resizeactive, 40 0
+bind = $mainMod CTRL, k, resizeactive, 0 -40
+bind = $mainMod CTRL, j, resizeactive, 0 40
 
 # Workspace switching
 bind = $mainMod, 1, workspace, 1
