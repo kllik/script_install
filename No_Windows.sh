@@ -181,7 +181,7 @@ print_success "Hyprland y componentes instalados."
 
 # --- 17) INSTALAR APLICACIONES ---
 print_message "Instalando aplicaciones..."
-pacman -S --noconfirm qutebrowser discord steam obs-studio neovim tmux btop unzip wget curl
+pacman -S --noconfirm firefox steam neovim btop unzip wget curl
 print_success "Aplicaciones instaladas."
 
 # --- 18) INSTALAR FUENTES ---
