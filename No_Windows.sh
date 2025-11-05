@@ -196,7 +196,7 @@ print_success "Herramientas de desarrollo instaladas."
 
 # --- 20) INSTALAR TEMAS Y CONFIGURACIÓN GTK/QT ---
 print_message "Instalando temas..."
-pacman -S --noconfirm adwaita-icon-theme gnome-themes-extra qt5-wayland qt6-wayland qt5ct kvantum xdg-utils
+pacman -S --noconfirm adwaita-icon-theme gnome-themes-extra qt5-wayland qt6-wayland qt5ct xdg-utils
 print_success "Temas instalados."
 
 # --- 21) INSTALAR BLUETOOTH Y AUDIO ---
