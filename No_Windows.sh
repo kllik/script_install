@@ -10,7 +10,7 @@ GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 RED="\033[0;31m"
 YELLOW="\033[0;33m"
-NC="\033[0m" # No Color
+NC="\033[0m"
 
 # --- Funciones para mostrar mensajes ---
 print_message() {
@@ -31,17 +31,15 @@ print_warning() {
 
 # --- 1) VERIFICACIONES INICIALES ---
 
-# Verificar si se está ejecutando como root
 if [ "$EUID" -ne 0 ]; then
     print_error "Este script debe ejecutarse como root"
     exit 1
 fi
 
-# Definir dispositivos (asumiendo que ya se han creado las particiones)
 DISK="/dev/nvme0n1"
-SYSTEM_DEV="${DISK}p1" # Partición 1: Linux filesystem (935GB)
-SWAP_DEV="${DISK}p2"   # Partición 2: Linux swap (16GB)
-EFI_DEV="${DISK}p3"    # Partición 3: EFI System (1GB)
+SYSTEM_DEV="${DISK}p1"
+SWAP_DEV="${DISK}p2"
+EFI_DEV="${DISK}p3"
 
 print_message "Dispositivos a utilizar:"
 print_message "Partición Sistema BTRFS: $SYSTEM_DEV - 935GB"
@@ -94,11 +92,9 @@ print_success "fstab generado."
 
 print_message "Preparando archivos para chroot..."
 
-# Crear script post-chroot
 cat > /mnt/root/post-chroot.sh << 'EOL'
 #!/bin/bash
 
-# --- Colores y funciones de mensaje (dentro de chroot) ---
 GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 RED="\033[0;31m"
@@ -131,7 +127,17 @@ ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 hwclock --systohc
 print_success "Locale y zona horaria configurados."
 
-# --- 10) HOSTNAME Y HOSTS ---
+# --- 10) CONFIGURAR CONSOLE FONT ---
+print_message "Configurando fuente de consola..."
+pacman -S --noconfirm terminus-font
+cat > /etc/vconsole.conf << EOF
+KEYMAP=us
+FONT=ter-v18n
+FONT_MAP=8859-1
+EOF
+print_success "Fuente de consola configurada (Terminus 18pt)."
+
+# --- 11) HOSTNAME Y HOSTS ---
 print_message "Configurando hostname..."
 echo "host" > /etc/hostname
 cat > /etc/hosts << EOF
@@ -141,27 +147,27 @@ cat > /etc/hosts << EOF
 EOF
 print_success "Hostname configurado."
 
-# --- 11) CONTRASEÑA ROOT ---
+# --- 12) CONTRASEÑA ROOT ---
 print_message "A continuación deberás configurar la contraseña de root:"
 passwd
 
-# --- 12) HABILITAR MULTILIB ---
+# --- 13) HABILITAR MULTILIB ---
 print_message "Habilitando repositorio multilib..."
 sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Repositorio multilib habilitado."
 
-# --- 13) INSTALAR PAQUETES ESENCIALES ---
+# --- 14) INSTALAR PAQUETES ESENCIALES ---
 print_message "Instalando paquetes esenciales del sistema..."
 pacman -S --noconfirm networkmanager sudo grub efibootmgr ntfs-3g mtools dosfstools nano vim git base-devel linux-headers
 print_success "Paquetes esenciales instalados."
 
-# --- 14) INSTALAR DRIVERS NVIDIA ---
+# --- 15) INSTALAR DRIVERS NVIDIA ---
 print_message "Instalando drivers NVIDIA..."
 pacman -S --noconfirm nvidia nvidia-utils nvidia-settings lib32-nvidia-utils vulkan-icd-loader lib32-vulkan-icd-loader egl-wayland
 print_success "Drivers NVIDIA instalados."
 
-# --- 15) CONFIGURAR NVIDIA PARA WAYLAND ---
+# --- 16) CONFIGURAR NVIDIA PARA WAYLAND ---
 print_message "Configurando NVIDIA para Wayland..."
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << EOF
@@ -170,58 +176,57 @@ options nvidia NVreg_PreserveVideoMemoryAllocations=1
 EOF
 
 print_message "Configurando mkinitcpio..."
-# Reemplaza la línea de módulos para asegurar que los de NVIDIA estén presentes
 sed -i 's/^MODULES=.*/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)/' /etc/mkinitcpio.conf
 print_success "Configuración de NVIDIA preparada."
 
-# --- 16) INSTALAR HYPRLAND Y COMPONENTES DE ESCRITORIO ---
+# --- 17) INSTALAR HYPRLAND Y COMPONENTES DE ESCRITORIO ---
 print_message "Instalando Hyprland y componentes de escritorio..."
-pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland xorg-xwayland waybar wofi alacritty polkit polkit-gnome xdg-desktop-portal-gtk pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber grim slurp wl-clipboard brightnessctl playerctl thunar thunar-archive-plugin gvfs udisks2 hyprpaper hyprlock hypridle swaync network-manager-applet blueman pavucontrol lm_sensors
+pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland xorg-xwayland waybar wofi alacritty polkit polkit-gnome xdg-desktop-portal-gtk pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber grim slurp wl-clipboard brightnessctl playerctl thunar thunar-archive-plugin gvfs udisks2 hyprpaper hyprlock hypridle swaync network-manager-applet blueman pavucontrol lm_sensors pamixer hyprpicker zenity jq libnotify wdisplays
 print_success "Hyprland y componentes instalados."
 
-# --- 17) INSTALAR APLICACIONES ---
+# --- 18) INSTALAR APLICACIONES ---
 print_message "Instalando aplicaciones..."
 pacman -S --noconfirm chromium zathura zathura-pdf-mupdf steam neovim btop unzip wget curl
 print_success "Aplicaciones instaladas."
 
-# --- 18) INSTALAR FUENTES ---
+# --- 19) INSTALAR FUENTES ---
 print_message "Instalando fuentes..."
 pacman -S --noconfirm ttf-jetbrains-mono-nerd ttf-font-awesome noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation ttf-roboto ttf-ubuntu-font-family
 print_success "Fuentes instaladas."
 
-# --- 19) INSTALAR HERRAMIENTAS DE DESARROLLO ---
+# --- 20) INSTALAR HERRAMIENTAS DE DESARROLLO ---
 print_message "Instalando herramientas de desarrollo..."
 pacman -S --noconfirm gcc clang cmake ninja meson gdb lldb python python-pip nodejs npm jdk-openjdk sqlite lua typescript
 print_success "Herramientas de desarrollo instaladas."
 
-# --- 20) INSTALAR TEMAS Y CONFIGURACIÓN GTK/QT ---
+# --- 21) INSTALAR TEMAS Y CONFIGURACIÓN GTK/QT ---
 print_message "Instalando temas..."
 pacman -S --noconfirm adwaita-icon-theme gnome-themes-extra qt5-wayland qt6-wayland qt5ct xdg-utils
 print_success "Temas instalados."
 
-# --- 21) INSTALAR BLUETOOTH Y AUDIO ---
+# --- 22) INSTALAR BLUETOOTH Y AUDIO ---
 print_message "Instalando soporte de Bluetooth y audio..."
 pacman -S --noconfirm bluez bluez-utils pulseaudio-bluetooth
 print_success "Bluetooth y audio instalados."
 
-# --- 22) INSTALAR HERRAMIENTAS ADICIONALES ---
+# --- 23) INSTALAR HERRAMIENTAS ADICIONALES ---
 print_message "Instalando herramientas adicionales..."
 pacman -S --noconfirm vulkan-tools vulkan-validation-layers sdl2 ddcutil
 print_success "Herramientas adicionales instaladas."
 
-# --- 23) REGENERAR INITRAMFS ---
+# --- 24) REGENERAR INITRAMFS ---
 print_message "Regenerando initramfs con configuración completa..."
 mkinitcpio -P
 print_success "Initramfs regenerado."
 
-# --- 24) CONFIGURAR GRUB ---
+# --- 25) CONFIGURAR GRUB ---
 print_message "Configurando GRUB..."
 sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configurado."
 
-# --- 25) CREAR GRUPOS NECESARIOS ---
+# --- 26) CREAR GRUPOS NECESARIOS ---
 print_message "Creando grupos necesarios..."
 groupadd -f wheel
 groupadd -f video
@@ -232,7 +237,7 @@ groupadd -f network
 groupadd -f power
 print_success "Grupos creados."
 
-# --- 26) CREAR USUARIO ---
+# --- 27) CREAR USUARIO ---
 print_message "Creando usuario 'antonio'..."
 useradd -m -G wheel,video,audio,storage,optical,network,power -s /bin/bash antonio
 print_message "Configura la contraseña para el usuario 'antonio':"
@@ -243,14 +248,14 @@ echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
 print_success "Usuario creado con privilegios sudo."
 
-# --- 27) HABILITAR SERVICIOS ---
+# --- 28) HABILITAR SERVICIOS ---
 print_message "Habilitando servicios..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable fstrim.timer
 print_success "Servicios habilitados."
 
-# --- 28) CONFIGURAR TEMA OSCURO Y VARIABLES DE ENTORNO ---
+# --- 29) CONFIGURAR TEMA OSCURO Y VARIABLES DE ENTORNO ---
 print_message "Configurando tema oscuro para GTK y Qt..."
 mkdir -p /etc/gtk-3.0 /etc/gtk-4.0
 cat > /etc/gtk-3.0/settings.ini << EOF
@@ -275,39 +280,73 @@ EOF
 cp /etc/gtk-3.0/settings.ini /etc/gtk-4.0/settings.ini
 
 cat > /etc/environment << EOF
-# Tema oscuro para Qt y GTK
 QT_QPA_PLATFORMTHEME=qt5ct
 GTK_THEME=Adwaita-dark
 EOF
 print_success "Tema oscuro configurado."
 
-# --- 29) CONFIGURAR ENTORNO DE ESCRITORIO ---
+# --- 30) CONFIGURAR ENTORNO DE ESCRITORIO ---
 print_message "Configurando entorno Hyprland, Waybar y Alacritty..."
 
-# Crear directorios de configuración
-mkdir -p /home/antonio/.config/{hypr/scripts,waybar,alacritty,qt5ct,gtk-3.0,gtk-4.0,wofi}
+mkdir -p /home/antonio/.config/{hypr/scripts,waybar/scripts,alacritty,qt5ct,gtk-3.0,gtk-4.0,wofi,swayosd}
 mkdir -p /home/antonio/Imágenes/Capturas
 mkdir -p /home/antonio/Wallpapers
 
-# Script para cambiar el fondo de pantalla
-cat > /home/antonio/.config/hypr/scripts/wallpaper-changer.sh << 'EOSH'
-#!/bin/bash
-WALLPAPERS_DIR="$HOME/Wallpapers"
-if [ ! -d "$WALLPAPERS_DIR" ] || [ -z "$(ls -A "$WALLPAPERS_DIR")" ]; then
-    notify-send "Error" "No hay fondos de pantalla en $WALLPAPERS_DIR" -i dialog-error
-    exit 1
-fi
-WALLPAPERS=("$WALLPAPERS_DIR"/*)
-RANDOM_WALLPAPER=${WALLPAPERS[$RANDOM % ${#WALLPAPERS[@]}]}
-MONITOR=${1:-"eDP-1"}
-sed -i "s|wallpaper = $MONITOR,.*|wallpaper = $MONITOR,$RANDOM_WALLPAPER|g" "$HOME/.config/hypr/hyprpaper.conf"
-killall hyprpaper
-hyprpaper &
-notify-send "Fondo cambiado" "Nuevo fondo: $RANDOM_WALLPAPER" -i dialog-information
-EOSH
-chmod +x /home/antonio/.config/hypr/scripts/wallpaper-changer.sh
+# --- SWAYOSD STYLE ---
+cat > /home/antonio/.config/swayosd/style.css << 'EOSWAYOSD'
+window#osd {
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 8px;
+    border: 1px solid #333333;
+    padding: 6px 12px;
+}
 
-# Configuración de hyprpaper
+#container {
+    margin: 2px;
+}
+
+image {
+    color: #ffffff;
+    margin-right: 6px;
+    -gtk-icon-size: 16px;
+}
+
+progressbar {
+    min-height: 4px;
+    min-width: 100px;
+    border-radius: 2px;
+    background: #333333;
+}
+
+progressbar progress {
+    min-height: 4px;
+    border-radius: 2px;
+    background: #ffffff;
+}
+
+label {
+    color: #ffffff;
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 11px;
+    margin-left: 4px;
+}
+EOSWAYOSD
+
+# --- WALLPAPER SCRIPT ---
+cat > /home/antonio/.config/waybar/scripts/wallpaper.sh << 'EOWALLPAPER'
+#!/bin/bash
+selected=$(zenity --file-selection --title="Select Wallpaper" --file-filter="Images | *.png *.jpg *.jpeg *.webp" 2>/dev/null)
+if [ -n "$selected" ] && [ -f "$selected" ]; then
+    echo "preload = $selected" > ~/.config/hypr/hyprpaper.conf
+    echo "wallpaper = ,$selected" >> ~/.config/hypr/hyprpaper.conf
+    killall hyprpaper 2>/dev/null
+    hyprpaper &
+    notify-send "Wallpaper changed" "$selected"
+fi
+EOWALLPAPER
+chmod +x /home/antonio/.config/waybar/scripts/wallpaper.sh
+
+# --- HYPRPAPER CONFIG ---
 cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
 # Para añadir fondos, coloca imágenes en ~/Wallpapers y añade líneas como las siguientes:
 # preload = /home/antonio/Wallpapers/tu-imagen.jpg
@@ -315,7 +354,7 @@ cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
 # wallpaper = eDP-1,/home/antonio/Wallpapers/tu-imagen.jpg
 EOF
 
-# Configuración de Hyprland (CORREGIDA)
+# --- HYPRLAND CONFIG ---
 cat > /home/antonio/.config/hypr/hyprland.conf << 'EOHYPR'
 # Hyprland configuration file - Complete and production-ready configuration
 # This file manages the complete Hyprland window manager configuration
@@ -341,6 +380,9 @@ exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = nm-applet
 exec-once = swaync
 exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+
+# SwayOSD server - requires swayosd-git from AUR (install after first boot with yay)
+exec-once = swayosd-server
 
 # --- ENVIRONMENT VARIABLES ---
 env = XCURSOR_SIZE,24
@@ -505,15 +547,15 @@ bind = $mainMod, mouse_up, workspace, e-1
 bindm = $mainMod, mouse:272, movewindow
 bindm = $mainMod, mouse:273, resizewindow
 
-# Volume controls
-binde = , XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+
-binde = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
-bind = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
-bind = , XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+# Volume controls with SwayOSD (requires swayosd-git from AUR)
+bindle = , XF86AudioRaiseVolume, exec, swayosd-client --output-volume raise
+bindle = , XF86AudioLowerVolume, exec, swayosd-client --output-volume lower
+bindl = , XF86AudioMute, exec, swayosd-client --output-volume mute-toggle
+bindl = , XF86AudioMicMute, exec, swayosd-client --input-volume mute-toggle
 
-# Brightness controls
-binde = , XF86MonBrightnessUp, exec, brightnessctl s 10%+
-binde = , XF86MonBrightnessDown, exec, brightnessctl s 10%-
+# Brightness controls with SwayOSD (requires swayosd-git from AUR)
+bindle = , XF86MonBrightnessUp, exec, swayosd-client --brightness raise
+bindle = , XF86MonBrightnessDown, exec, swayosd-client --brightness lower
 
 # Media controls
 bindl = , XF86AudioNext, exec, playerctl next
@@ -523,7 +565,6 @@ bindl = , XF86AudioPlay, exec, playerctl play-pause
 # Screenshots
 bind = , Print, exec, grim -g "$(slurp)" - | wl-copy
 bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/Capturas/captura-$(date +'%Y-%m-%d-%H%M%S').png
-bind = SUPER_CTRL, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
 
 # --- WINDOW RULES ---
 windowrulev2 = float,class:^(pavucontrol)$
@@ -534,214 +575,235 @@ windowrulev2 = suppressevent maximize, class:.*
 windowrulev2 = opacity 1.0 override,class:^(code-oss|Code)$
 EOHYPR
 
-# Configuración de Waybar (config.jsonc) - ACTUALIZADA
+# --- WAYBAR CONFIG ---
 cat > /home/antonio/.config/waybar/config.jsonc << 'EOWAYBAR'
 {
     "layer": "top",
     "position": "top",
     "height": 28,
+    "margin": 0,
     "spacing": 0,
-    "modules-left": ["hyprland/workspaces"],
-    "modules-center": [],
-    "modules-right": ["custom/cpu", "custom/gpu", "custom/ram", "battery", "network", "bluetooth", "clock"],
-    
+
+    "modules-left": ["custom/colorpicker", "custom/screenshot", "custom/wallpaper", "custom/display", "hyprland/workspaces", "hyprland/window"],
+    "modules-center": ["clock"],
+    "modules-right": ["tray", "bluetooth", "network", "pulseaudio", "backlight", "battery"],
+
+    "custom/colorpicker": {
+        "format": "󰈊",
+        "tooltip-format": "Color Picker",
+        "on-click": "hyprpicker -a -n"
+    },
+
+    "custom/screenshot": {
+        "format": "󰹑",
+        "tooltip-format": "Screenshot (right-click: region)",
+        "on-click": "grim ~/Imágenes/$(date +%Y%m%d_%H%M%S).png && notify-send 'Screenshot saved'",
+        "on-click-right": "grim -g \"$(slurp)\" ~/Imágenes/$(date +%Y%m%d_%H%M%S).png && notify-send 'Screenshot saved'"
+    },
+
+    "custom/wallpaper": {
+        "format": "󰸉",
+        "tooltip-format": "Change Wallpaper",
+        "on-click": "~/.config/waybar/scripts/wallpaper.sh"
+    },
+
+    "custom/display": {
+        "format": "󰍹",
+        "tooltip-format": "Switch Monitor (right-click: settings)",
+        "on-click": "hyprctl dispatch focusmonitor +1",
+        "on-click-right": "wdisplays || nwg-displays"
+    },
+
     "hyprland/workspaces": {
-        "format": "{id}",
+        "format": "{name}",
         "on-click": "activate",
         "sort-by-number": true
     },
-    
-    "custom/cpu": {
-        "exec": "echo \"CPU: $(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf \"%.0f%%\", usage}') $(sensors 2>/dev/null | grep 'Package' | awk '{print $4}' | sed 's/+//' | sed 's/\\..*°C/°C/' | head -1 || echo '')\"",
-        "interval": 2,
-        "tooltip": false,
-        "format": "{}"
+
+    "hyprland/window": {
+        "format": "{}",
+        "max-length": 40,
+        "separate-outputs": true
     },
-    
-    "custom/gpu": {
-        "exec": "echo \"GPU: $(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 'N/A')% $(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print $1\"°C\"}' || echo '')\"",
-        "interval": 2,
-        "tooltip": false,
-        "format": "{}"
-    },
-    
-    "custom/ram": {
-        "exec": "echo \"RAM: $(free -h | awk '/^Mem:/ {print $3}' | sed 's/Gi/G/')\"",
-        "interval": 2,
-        "tooltip": false,
-        "format": "{}"
-    },
-    
-    "battery": {
-        "states": {
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "BAT: {capacity}%",
-        "format-charging": "CHG: {capacity}%",
-        "format-plugged": "AC: {capacity}%",
-        "tooltip": false
-    },
-    
-    "network": {
-        "format-wifi": "WiFi: {signalStrength}%",
-        "format-ethernet": "LAN: OK",
-        "format-disconnected": "NET: OFF",
-        "tooltip": false,
-        "on-click": "nm-connection-editor"
-    },
-    
-    "bluetooth": {
-        "format": "BT: ON",
-        "format-on": "BT: ON",
-        "format-off": "BT: OFF",
-        "format-connected": "BT: {num_connections}",
-        "format-disabled": "BT: DIS",
-        "tooltip": false,
-        "on-click": "blueman-manager"
-    },
-    
+
     "clock": {
-        "format": "{:%H:%M}",
-        "tooltip": true,
-        "tooltip-format": "<tt><small>{calendar}</small></tt>",
-        "calendar": {
-            "mode": "month",
-            "mode-mon-col": 3,
-            "weeks-pos": "left",
-            "on-scroll": 1,
-            "format": {
-                "months": "<span color='#ffffff'><b>{}</b></span>",
-                "days": "<span color='#ffffff'><b>{}</b></span>",
-                "weeks": "<span color='#999999'><b>W{}</b></span>",
-                "weekdays": "<span color='#cccccc'><b>{}</b></span>",
-                "today": "<span color='#888888'><b><u>{}</u></b></span>"
-            }
-        }
+        "format": " {:%H:%M}",
+        "format-alt": " {:%A %d %B}",
+        "tooltip-format": "{calendar}"
+    },
+
+    "tray": {
+        "spacing": 8,
+        "icon-size": 14
+    },
+
+    "bluetooth": {
+        "format": "󰂯",
+        "format-connected": "󰂱",
+        "format-disabled": "󰂲",
+        "format-off": "󰂲",
+        "on-click": "blueman-manager",
+        "tooltip-format": "{status}"
+    },
+
+    "network": {
+        "format-wifi": "󰤨 {signalStrength}%",
+        "format-ethernet": "󰈀",
+        "format-disconnected": "󰤭",
+        "on-click": "nm-connection-editor",
+        "tooltip-format-wifi": "{essid} ({signalStrength}%)"
+    },
+
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": "󰝟",
+        "format-icons": {
+            "default": ["󰕿", "󰖀", "󰕾"]
+        },
+        "on-click": "pavucontrol",
+        "on-scroll-up": "swayosd-client --output-volume raise",
+        "on-scroll-down": "swayosd-client --output-volume lower"
+    },
+
+    "backlight": {
+        "format": "{icon} {percent}%",
+        "format-icons": ["󰃞", "󰃟", "󰃠"],
+        "on-scroll-up": "swayosd-client --brightness raise",
+        "on-scroll-down": "swayosd-client --brightness lower"
+    },
+
+    "battery": {
+        "format": "{icon} {capacity}%",
+        "format-charging": "󰂄 {capacity}%",
+        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
     }
 }
 EOWAYBAR
 
-# Configuración de Waybar (style.css) - ACTUALIZADA
+# --- WAYBAR STYLE ---
 cat > /home/antonio/.config/waybar/style.css << 'EOWAYBARSTYLE'
-/* Waybar Minimal Dark Style - Simple White Text */
-
 * {
-    font-family: "JetBrains Mono", monospace;
+    font-family: "JetBrainsMono Nerd Font";
     font-size: 12px;
-    font-weight: 400;
-    border: none;
-    border-radius: 0;
+    font-weight: 500;
     min-height: 0;
-    margin: 0;
     padding: 0;
+    margin: 0;
 }
 
 window#waybar {
-    background-color: rgba(30, 30, 35, 0.95);
-    color: #ffffff;
-    transition: none;
+    background: #000000;
+    border: none;
 }
 
-/* Workspaces */
+#custom-colorpicker, #custom-screenshot, #custom-wallpaper, #custom-display {
+    color: #888888;
+    padding: 0 8px;
+}
+
+#custom-colorpicker:hover, #custom-screenshot:hover, #custom-wallpaper:hover, #custom-display:hover {
+    color: #ffffff;
+    background: #222222;
+}
+
 #workspaces {
-    margin: 0;
-    padding: 0 4px;
+    margin: 0 4px;
 }
 
 #workspaces button {
-    background: transparent;
     color: #888888;
-    padding: 0 8px;
-    margin: 0 3px;
-    min-width: 26px;
-    font-weight: 500;
+    background: transparent;
+    padding: 2px 6px;
 }
 
-#workspaces button.visible {
-    color: #c0c0c0;
-    background: rgba(255, 255, 255, 0.05);
+#workspaces button:hover {
+    color: #ffffff;
 }
 
 #workspaces button.active {
     color: #ffffff;
-    background: rgba(150, 150, 150, 0.3);
-    font-weight: bold;
+    background: #333333;
 }
 
-#workspaces button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+#window {
+    color: #666666;
+    padding: 0 10px;
 }
 
-/* All right modules - White color */
-#custom-cpu,
-#custom-gpu,
-#custom-ram,
-#battery,
-#network,
-#bluetooth,
 #clock {
     color: #ffffff;
     padding: 0 10px;
-    margin: 0;
-    font-family: "JetBrains Mono", monospace;
 }
 
-/* Add subtle separators */
-#custom-gpu {
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    margin-left: 2px;
+#tray {
+    padding: 0 8px;
 }
 
-#custom-ram {
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    margin-left: 2px;
+#bluetooth {
+    color: #6699ff;
+    padding: 0 8px;
+}
+
+#bluetooth.disabled, #bluetooth.off {
+    color: #444444;
+}
+
+#bluetooth.connected {
+    color: #66ff99;
+}
+
+#network {
+    color: #66ccff;
+    padding: 0 8px;
+}
+
+#network.disconnected {
+    color: #444444;
+}
+
+#pulseaudio {
+    color: #cc99ff;
+    padding: 0 8px;
+}
+
+#pulseaudio.muted {
+    color: #444444;
+}
+
+#backlight {
+    color: #ffcc66;
+    padding: 0 8px;
 }
 
 #battery {
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    margin-left: 2px;
+    color: #66ff99;
+    padding: 0 10px;
 }
 
-/* Clock */
-#clock {
-    padding-right: 10px;
-    font-weight: 500;
+#battery.charging {
+    color: #66ffcc;
 }
 
-/* Hover effects */
-#custom-cpu:hover,
-#custom-gpu:hover,
-#custom-ram:hover,
-#battery:hover,
-#network:hover,
-#bluetooth:hover,
-#clock:hover {
-    background: rgba(255, 255, 255, 0.05);
+#battery.warning {
+    color: #ffcc66;
 }
 
-/* Tooltip styling */
+#battery.critical {
+    color: #ff6666;
+}
+
 tooltip {
-    background: rgba(20, 20, 25, 0.98);
-    border: 1px solid rgba(150, 150, 150, 0.3);
-    border-radius: 4px;
-    padding: 8px;
+    background: #000000;
+    border: 1px solid #333333;
 }
 
 tooltip label {
     color: #ffffff;
-    font-size: 11px;
-}
-
-/* Calendar in tooltip */
-tooltip calendar {
-    background: transparent;
-    color: #ffffff;
+    padding: 4px;
 }
 EOWAYBARSTYLE
 
-# Configuración de Alacritty (CORREGIDA)
+# --- ALACRITTY CONFIG ---
 cat > /home/antonio/.config/alacritty/alacritty.toml << 'EOALAC'
 # Alacritty Terminal Configuration - Final Version with Blue Selection
 # This configuration provides a complete terminal setup with warm gray background and custom shortcuts
@@ -780,7 +842,6 @@ y = 0
 x = 0
 y = 0
 
-# Warm gray background with White Text and Soft Yellow for Warnings
 [colors.primary]
 background = "#2b2b2b"
 foreground = "#ffffff"
@@ -815,32 +876,29 @@ background = "#2b2b2b"
 text = "#ffffff"
 background = "#4169e1"
 
-# Normal colors - Warm gray background palette with soft yellow for errors
 [colors.normal]
 black = "#2b2b2b"
-red = "#e6db74"      # Soft yellow for errors/warnings instead of red
+red = "#e6db74"
 green = "#a6e22e"
-yellow = "#f4bf75"   # Brighter yellow
+yellow = "#f4bf75"
 blue = "#66d9ef"
 magenta = "#ae81ff"
 cyan = "#66d9ef"
 white = "#ffffff"
 
-# Bright colors
 [colors.bright]
 black = "#75715e"
-red = "#f4bf75"      # Soft yellow for bright errors
+red = "#f4bf75"
 green = "#a6e22e"
-yellow = "#fcf5ae"   # Even brighter yellow
+yellow = "#fcf5ae"
 blue = "#66d9ef"
 magenta = "#ae81ff"
 cyan = "#a1efe4"
 white = "#ffffff"
 
-# Dim colors
 [colors.dim]
 black = "#2b2b2b"
-red = "#d4c96e"      # Dimmed yellow
+red = "#d4c96e"
 green = "#87c22f"
 yellow = "#c7b55a"
 blue = "#55b3cc"
@@ -867,7 +925,6 @@ args = ["--login"]
 [env]
 TERM = "xterm-256color"
 
-# Inverted keyboard shortcuts as requested
 [[keyboard.bindings]]
 key = "C"
 mods = "Control"
@@ -881,7 +938,7 @@ action = "Paste"
 [[keyboard.bindings]]
 key = "C"
 mods = "Control|Shift"
-chars = "\u0003"  # Send interrupt signal (Ctrl+C)
+chars = "\u0003"
 
 [[keyboard.bindings]]
 key = "V"
@@ -990,7 +1047,7 @@ log_level = "Warn"
 print_events = false
 EOALAC
 
-# Configuración de Wofi
+# --- WOFI CONFIG ---
 cat > /home/antonio/.config/wofi/config << EOF
 width=600
 height=400
@@ -1042,9 +1099,8 @@ window {
 }
 EOF
 
-# Configuración de Bash
+# --- BASHRC ---
 cat > /home/antonio/.bashrc << 'EORC'
-# .bashrc
 [[ $- != *i* ]] && return
 alias ls='ls --color=auto'
 alias ll='ls -alF'
@@ -1061,20 +1117,18 @@ export PATH="$PATH:$GEM_HOME/bin"
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 EORC
 
-# Configuración de perfil
+# --- PROFILE ---
 cat > /home/antonio/.profile << 'EOPF'
-# Variables de entorno para Wayland
 export QT_QPA_PLATFORMTHEME="qt5ct"
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export GTK_THEME="Adwaita-dark"
 export MOZ_ENABLE_WAYLAND=1
-# Cargar bashrc
 if [ -n "$BASH_VERSION" ] && [ -f "$HOME/.bashrc" ]; then
     . "$HOME/.bashrc"
 fi
 EOPF
 
-# Recomendaciones post-instalación
+# --- POST-INSTALLATION RECOMMENDATIONS ---
 cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOTXT'
 === RECOMENDACIONES POST-INSTALACIÓN ===
 
@@ -1084,20 +1138,42 @@ cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOTXT'
    cd yay
    makepkg -si
 
-2. Instalar aplicaciones desde AUR (ejemplo: Visual Studio Code):
+2. IMPORTANTE - Instalar SwayOSD para el OSD de volumen/brillo:
+   yay -S swayosd-git
+
+   Sin SwayOSD, los controles de volumen y brillo no mostrarán indicador visual.
+   SwayOSD ya está configurado en Hyprland y Waybar, solo necesita instalarse.
+
+3. Instalar aplicaciones desde AUR (ejemplo: Visual Studio Code):
    yay -S visual-studio-code-bin
 
-3. Configurar Rust:
+4. Configurar Rust:
    rustup default stable
 
-4. Configurar sensores de temperatura (para CPU):
+5. Configurar sensores de temperatura (para CPU):
    sudo sensors-detect
    # Responder YES a todas las preguntas seguras
 
-NOTAS IMPORTANTES:
+ATAJOS DE TECLADO:
 - Cambiar entre teclado US y ES: Alt+Shift
-- Cambiar fondo de pantalla: Ctrl+Super+T
 - Abrir lanzador de aplicaciones (Wofi): Super+R
+- Terminal: Super+Q
+- Cerrar ventana: Super+C
+- Explorador de archivos: Super+E
+- Screenshot a portapapeles: Print
+- Screenshot guardado: Super+Z
+
+MÓDULOS DE WAYBAR (clic izquierdo):
+- 󰈊 Color Picker: Selecciona cualquier color de la pantalla
+- 󰹑 Screenshot: Captura de pantalla completa (clic derecho: región)
+- 󰸉 Wallpaper: Cambiar fondo de pantalla
+- 󰍹 Display: Cambiar monitor activo (clic derecho: configuración)
+
+MÓDULOS DE WAYBAR (clic abre app):
+- 󰂯 Bluetooth: blueman-manager
+- 󰤨 WiFi: nm-connection-editor
+- 󰕾 Volumen: pavucontrol (scroll: ajustar volumen con OSD)
+- 󰃠 Brillo: scroll para ajustar con OSD
 
 Para mayor seguridad, considera instalar y configurar un firewall:
   sudo pacman -S ufw
@@ -1105,14 +1181,12 @@ Para mayor seguridad, considera instalar y configurar un firewall:
   sudo systemctl enable ufw
 EOTXT
 
-# Cambiar propiedad de los archivos
 chown -R antonio:antonio /home/antonio/
 print_success "Configuración del entorno de escritorio finalizada."
 print_message "La instalación base ha sido completada."
 print_warning "Escribe 'exit', desmonta las particiones con 'umount -R /mnt' y reinicia."
 EOL
 
-# Hacer ejecutable el script post-chroot
 chmod +x /mnt/root/post-chroot.sh
 
 # --- 7) EJECUTAR CHROOT ---
@@ -1129,3 +1203,5 @@ print_message "umount -R /mnt"
 print_message "reboot"
 echo
 print_warning "Recuerda retirar el medio de instalación durante el reinicio."
+print_warning "IMPORTANTE: Después del primer inicio, instala SwayOSD desde AUR:"
+print_warning "  yay -S swayosd-git"
