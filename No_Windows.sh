@@ -36,15 +36,71 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-DISK="/dev/nvme0n1"
-SYSTEM_DEV="${DISK}p1"
-SWAP_DEV="${DISK}p2"
-EFI_DEV="${DISK}p3"
+# --- AUTOMATIC DISK DETECTION ---
+print_message "Detecting available disks..."
+echo
 
-print_message "Devices to use:"
-print_message "BTRFS System Partition: $SYSTEM_DEV - 935GB"
-print_message "SWAP Partition: $SWAP_DEV - 16GB"
-print_message "EFI Partition: $EFI_DEV - 1GB"
+mapfile -t AVAILABLE_DISKS < <(lsblk -dpno NAME,SIZE,TYPE | grep 'disk' | awk '{print $1 " (" $2 ")"}')
+
+if [ ${#AVAILABLE_DISKS[@]} -eq 0 ]; then
+    print_error "No disks detected on system"
+    exit 1
+fi
+
+echo "Available disks:"
+for i in "${!AVAILABLE_DISKS[@]}"; do
+    echo "  $((i+1))) ${AVAILABLE_DISKS[$i]}"
+done
+echo
+
+read -p "Select disk number for installation: " disk_choice
+
+if ! [[ "$disk_choice" =~ ^[0-9]+$ ]] || [ "$disk_choice" -lt 1 ] || [ "$disk_choice" -gt ${#AVAILABLE_DISKS[@]} ]; then
+    print_error "Invalid selection"
+    exit 1
+fi
+
+DISK=$(echo "${AVAILABLE_DISKS[$((disk_choice-1))]}" | awk '{print $1}')
+
+# Determine partition naming convention (nvme uses p1, sda uses 1)
+if [[ "$DISK" == *"nvme"* ]] || [[ "$DISK" == *"mmcblk"* ]]; then
+    PART_PREFIX="${DISK}p"
+else
+    PART_PREFIX="${DISK}"
+fi
+
+# --- PARTITION DETECTION ---
+print_message "Detecting partitions on $DISK..."
+echo
+
+mapfile -t PARTITIONS < <(lsblk -pno NAME,SIZE,FSTYPE "$DISK" | grep -E "^${PART_PREFIX}[0-9]+" | awk '{print $1 " " $2 " " $3}')
+
+if [ ${#PARTITIONS[@]} -lt 3 ]; then
+    print_error "Expected at least 3 partitions (System, Swap, EFI)"
+    print_message "Create partitions first with: cfdisk $DISK"
+    exit 1
+fi
+
+echo "Detected partitions:"
+for i in "${!PARTITIONS[@]}"; do
+    echo "  $((i+1))) ${PARTITIONS[$i]}"
+done
+echo
+
+read -p "Enter partition number for BTRFS SYSTEM: " sys_choice
+read -p "Enter partition number for SWAP: " swap_choice
+read -p "Enter partition number for EFI: " efi_choice
+
+SYSTEM_DEV=$(echo "${PARTITIONS[$((sys_choice-1))]}" | awk '{print $1}')
+SWAP_DEV=$(echo "${PARTITIONS[$((swap_choice-1))]}" | awk '{print $1}')
+EFI_DEV=$(echo "${PARTITIONS[$((efi_choice-1))]}" | awk '{print $1}')
+
+echo
+print_message "Selected configuration:"
+print_message "  Disk: $DISK"
+print_message "  BTRFS System: $SYSTEM_DEV"
+print_message "  SWAP: $SWAP_DEV"
+print_message "  EFI: $EFI_DEV"
 print_warning "This script assumes partitions were already created with cfdisk."
 echo
 read -p "Continue with installation? [y/N]: " response
@@ -272,6 +328,13 @@ print_success "Bluetooth and audio installed."
 print_message "Installing additional tools..."
 pacman -S --noconfirm vulkan-tools ddcutil libnotify
 print_success "Additional tools installed."
+
+# --- 22b) INSTALL VIRTUALIZATION TOOLS ---
+print_message "Installing virtualization tools..."
+pacman -S --noconfirm virtualbox virtualbox-host-modules-arch
+modprobe vboxdrv
+usermod -aG vboxusers antonio
+print_success "VirtualBox installed. User 'antonio' added to vboxusers group."
 
 # --- 23) REGENERATE INITRAMFS ---
 print_message "Regenerating initramfs with complete configuration..."
