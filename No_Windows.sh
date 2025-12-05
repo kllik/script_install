@@ -69,15 +69,20 @@ else
     PART_PREFIX="${DISK}"
 fi
 
+
 # --- PARTITION DETECTION ---
 print_message "Detecting partitions on $DISK..."
 echo
 
-mapfile -t PARTITIONS < <(lsblk -pno NAME,SIZE,FSTYPE "$DISK" | grep -E "^${PART_PREFIX}[0-9]+" | awk '{print $1 " " $2 " " $3}')
+# Use lsblk in list mode (-l) to avoid tree indentation issues
+mapfile -t PARTITIONS < <(lsblk -lnpo NAME,SIZE,FSTYPE "$DISK" | grep -E "^${PART_PREFIX}[0-9]")
 
 if [ ${#PARTITIONS[@]} -lt 3 ]; then
     print_error "Expected at least 3 partitions (System, Swap, EFI)"
     print_message "Create partitions first with: cfdisk $DISK"
+    print_message "Debug: PART_PREFIX=$PART_PREFIX"
+    print_message "Debug: Partitions found:"
+    lsblk -lnpo NAME,SIZE,FSTYPE "$DISK"
     exit 1
 fi
 
@@ -91,23 +96,17 @@ read -p "Enter partition number for BTRFS SYSTEM: " sys_choice
 read -p "Enter partition number for SWAP: " swap_choice
 read -p "Enter partition number for EFI: " efi_choice
 
+# Validate input is numeric and within range
+for choice in "$sys_choice" "$swap_choice" "$efi_choice"; do
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#PARTITIONS[@]} ]; then
+        print_error "Invalid partition selection: $choice"
+        exit 1
+    fi
+done
+
 SYSTEM_DEV=$(echo "${PARTITIONS[$((sys_choice-1))]}" | awk '{print $1}')
 SWAP_DEV=$(echo "${PARTITIONS[$((swap_choice-1))]}" | awk '{print $1}')
 EFI_DEV=$(echo "${PARTITIONS[$((efi_choice-1))]}" | awk '{print $1}')
-
-echo
-print_message "Selected configuration:"
-print_message "  Disk: $DISK"
-print_message "  BTRFS System: $SYSTEM_DEV"
-print_message "  SWAP: $SWAP_DEV"
-print_message "  EFI: $EFI_DEV"
-print_warning "This script assumes partitions were already created with cfdisk."
-echo
-read -p "Continue with installation? [y/N]: " response
-if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-    print_message "Installation cancelled."
-    exit 0
-fi
 
 # --- 2) FORMAT AND ACTIVATE SWAP ---
 
