@@ -1,24 +1,24 @@
 #!/bin/bash
 
-# === SCRIPT DE INSTALACIÓN DE ARCH LINUX CON BTRFS, HYPRLAND Y WAYBAR ===
-# Configuración para: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
-# Uso: Este script continúa la instalación DESPUÉS de usar cfdisk para crear las particiones
-# Configuración: Single boot - Solo Arch Linux (sin snapshots/puntos de recuperación)
+# === ARCH LINUX INSTALLATION SCRIPT WITH BTRFS, HYPRLAND AND QUICKSHELL ===
+# Configuration for: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
+# Usage: This script continues installation AFTER using cfdisk to create partitions
+# Configuration: Single boot - Arch Linux only
 
-# --- Colores para mensajes ---
+# --- Colors for messages ---
 GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 RED="\033[0;31m"
 YELLOW="\033[0;33m"
-NC="\033[0m" # No Color
+NC="\033[0m"
 
-# --- Funciones para mostrar mensajes ---
+# --- Message display functions ---
 print_message() {
-    echo -e "${BLUE}[INSTALACIÓN]${NC} $1"
+    echo -e "${BLUE}[INSTALLATION]${NC} $1"
 }
 
 print_success() {
-    echo -e "${GREEN}[COMPLETADO]${NC} $1"
+    echo -e "${GREEN}[COMPLETED]${NC} $1"
 }
 
 print_error() {
@@ -26,203 +26,267 @@ print_error() {
 }
 
 print_warning() {
-    echo -e "${YELLOW}[ADVERTENCIA]${NC} $1"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# --- 1) VERIFICACIONES INICIALES ---
+# --- 1) INITIAL CHECKS ---
 
-# Verificar si se está ejecutando como root
 if [ "$EUID" -ne 0 ]; then
-    print_error "Este script debe ejecutarse como root"
+    print_error "This script must be run as root"
     exit 1
 fi
 
-# Definir dispositivos (asumiendo que ya se han creado las particiones)
 DISK="/dev/nvme0n1"
-SYSTEM_DEV="${DISK}p1" # Partición 1: Linux filesystem (935GB)
-SWAP_DEV="${DISK}p2"   # Partición 2: Linux swap (16GB)
-EFI_DEV="${DISK}p3"    # Partición 3: EFI System (1GB)
+SYSTEM_DEV="${DISK}p1"
+SWAP_DEV="${DISK}p2"
+EFI_DEV="${DISK}p3"
 
-print_message "Dispositivos a utilizar:"
-print_message "Partición Sistema BTRFS: $SYSTEM_DEV - 935GB"
-print_message "Partición SWAP: $SWAP_DEV - 16GB"
-print_message "Partición EFI: $EFI_DEV - 1GB"
-print_warning "Este script asume que ya creaste las particiones con cfdisk."
-print_warning "Asegúrate de que las particiones existan y sean correctas."
+print_message "Devices to use:"
+print_message "BTRFS System Partition: $SYSTEM_DEV - 935GB"
+print_message "SWAP Partition: $SWAP_DEV - 16GB"
+print_message "EFI Partition: $EFI_DEV - 1GB"
+print_warning "This script assumes partitions were already created with cfdisk."
 echo
-read -p "¿Continuar con la instalación? [s/N]: " response
-if [[ ! "$response" =~ ^([sS][iI]|[sS])$ ]]; then
-    print_message "Instalación cancelada."
+read -p "Continue with installation? [y/N]: " response
+if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    print_message "Installation cancelled."
     exit 0
 fi
 
-# --- 2) FORMATEO Y ACTIVACIÓN SWAP ---
+# --- 2) FORMAT AND ACTIVATE SWAP ---
 
-print_message "Formateando partición EFI (${EFI_DEV})..."
+print_message "Formatting EFI partition (${EFI_DEV})..."
 mkfs.fat -F32 "$EFI_DEV"
-print_success "Partición EFI formateada."
+print_success "EFI partition formatted."
 
-print_message "Formateando y activando SWAP (${SWAP_DEV})..."
+print_message "Formatting and activating SWAP (${SWAP_DEV})..."
 mkswap "$SWAP_DEV" && swapon "$SWAP_DEV"
-print_success "SWAP configurada."
+print_success "SWAP configured."
 
-print_message "Formateando partición del sistema como BTRFS (${SYSTEM_DEV})..."
+print_message "Formatting system partition as BTRFS (${SYSTEM_DEV})..."
 mkfs.btrfs -f "$SYSTEM_DEV"
-print_success "Partición BTRFS formateada."
+print_success "BTRFS partition formatted."
 
-# --- 3) MONTAR SISTEMA ---
+# --- 3) MOUNT SYSTEM ---
 
-print_message "Montando sistema de archivos..."
+print_message "Mounting file system..."
 mount -o noatime,compress=zstd,space_cache=v2 "$SYSTEM_DEV" /mnt
 mkdir -p /mnt/boot/efi
 mount "$EFI_DEV" /mnt/boot/efi
-print_success "Sistema de archivos montado."
+print_success "File system mounted."
 
-# --- 4) INSTALAR SISTEMA BASE ---
+# --- 4) INSTALL BASE SYSTEM ---
 
-print_message "Instalando sistema base (esto puede tomar tiempo)..."
+print_message "Installing base system (this may take time)..."
 pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs
-print_success "Sistema base instalado."
+print_success "Base system installed."
 
-# --- 5) GENERAR FSTAB ---
+# --- 5) GENERATE FSTAB ---
 
-print_message "Generando fstab..."
+print_message "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
-print_success "fstab generado."
+print_success "fstab generated."
 
-# --- 6) PREPARAR CHROOT ---
+# --- 6) PREPARE CHROOT ---
 
-print_message "Preparando archivos para chroot..."
+print_message "Preparing files for chroot..."
 
-# Crear script post-chroot
 cat > /mnt/root/post-chroot.sh << 'EOL'
 #!/bin/bash
 
-# --- Colores y funciones de mensaje (dentro de chroot) ---
 GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 RED="\033[0;31m"
 NC="\033[0m"
 
 print_message() {
-    echo -e "${BLUE}[INSTALACIÓN]${NC} $1"
+    echo -e "${BLUE}[INSTALLATION]${NC} $1"
 }
 
 print_success() {
-    echo -e "${GREEN}[COMPLETADO]${NC} $1"
+    echo -e "${GREEN}[COMPLETED]${NC} $1"
 }
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# --- 8) INSTALAR NANO ---
-print_message "Instalando nano..."
+# --- 8) INSTALL NANO ---
+print_message "Installing nano..."
 pacman -Syu --noconfirm nano
-print_success "Nano instalado."
+print_success "Nano installed."
 
-# --- 9) CONFIGURAR LOCALE Y ZONA HORARIA ---
-print_message "Configurando locale y zona horaria..."
+# --- 9) CONFIGURE LOCALE AND TIMEZONE ---
+print_message "Configuring locale and timezone..."
 sed -i 's/#es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
 echo "LANG=es_ES.UTF-8" > /etc/locale.conf
 ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 hwclock --systohc
-print_success "Locale y zona horaria configurados."
+print_success "Locale and timezone configured."
 
-# --- 10) HOSTNAME Y HOSTS ---
-print_message "Configurando hostname..."
+# --- 10) HOSTNAME AND HOSTS ---
+print_message "Configuring hostname..."
 echo "host" > /etc/hostname
 cat > /etc/hosts << EOF
 127.0.0.1   localhost
 ::1         localhost
 127.0.1.1   host.localdomain host
 EOF
-print_success "Hostname configurado."
+print_success "Hostname configured."
 
-# --- 11) CONTRASEÑA ROOT ---
-print_message "A continuación deberás configurar la contraseña de root:"
+# --- 11) ROOT PASSWORD ---
+print_message "Configure root password:"
 passwd
 
-# --- 12) HABILITAR MULTILIB ---
-print_message "Habilitando repositorio multilib..."
+# --- 12) ENABLE MULTILIB ---
+print_message "Enabling multilib repository..."
 sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
-print_success "Repositorio multilib habilitado."
+print_success "Multilib repository enabled."
 
-# --- 13) INSTALAR PAQUETES ESENCIALES ---
-print_message "Instalando paquetes esenciales del sistema..."
-pacman -S --noconfirm networkmanager sudo grub efibootmgr ntfs-3g mtools dosfstools nano vim git base-devel linux-headers
-print_success "Paquetes esenciales instalados."
+# --- 13) INSTALL ESSENTIAL PACKAGES ---
+print_message "Installing essential system packages..."
+pacman -S --noconfirm networkmanager sudo grub efibootmgr ntfs-3g mtools dosfstools nano vim git linux-headers
+print_success "Essential packages installed."
 
-# --- 14) INSTALAR DRIVERS NVIDIA ---
-print_message "Instalando drivers NVIDIA..."
+# --- 14) INSTALL NVIDIA DRIVERS ---
+print_message "Installing NVIDIA drivers..."
 pacman -S --noconfirm nvidia nvidia-utils nvidia-settings lib32-nvidia-utils vulkan-icd-loader lib32-vulkan-icd-loader egl-wayland
-print_success "Drivers NVIDIA instalados."
+print_success "NVIDIA drivers installed."
 
-# --- 15) CONFIGURAR NVIDIA PARA WAYLAND ---
-print_message "Configurando NVIDIA para Wayland..."
+# --- 15) CONFIGURE NVIDIA FOR WAYLAND ---
+print_message "Configuring NVIDIA for Wayland..."
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << EOF
 options nvidia-drm modeset=1
 options nvidia NVreg_PreserveVideoMemoryAllocations=1
 EOF
 
-print_message "Configurando mkinitcpio..."
-# Reemplaza la línea de módulos para asegurar que los de NVIDIA estén presentes
 sed -i 's/^MODULES=.*/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)/' /etc/mkinitcpio.conf
-print_success "Configuración de NVIDIA preparada."
+print_success "NVIDIA configuration prepared."
 
-# --- 16) INSTALAR HYPRLAND Y COMPONENTES DE ESCRITORIO ---
-print_message "Instalando Hyprland y componentes de escritorio..."
-pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland xorg-xwayland waybar wofi alacritty polkit polkit-gnome xdg-desktop-portal-gtk pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber grim slurp wl-clipboard brightnessctl playerctl thunar thunar-archive-plugin gvfs udisks2 hyprpaper hyprlock hypridle swaync network-manager-applet blueman pavucontrol lm_sensors
-print_success "Hyprland y componentes instalados."
+# --- 16) INSTALL HYPRLAND AND DESKTOP COMPONENTS ---
+print_message "Installing Hyprland and desktop components..."
+pacman -S --noconfirm \
+    hyprland \
+    xdg-desktop-portal-hyprland \
+    xorg-xwayland \
+    quickshell \
+    hyprpicker \
+    swww \
+    wlr-randr \
+    zenity \
+    wofi \
+    alacritty \
+    polkit \
+    polkit-gnome \
+    xdg-desktop-portal-gtk \
+    pipewire \
+    pipewire-pulse \
+    pipewire-alsa \
+    pipewire-jack \
+    wireplumber \
+    grim \
+    slurp \
+    wl-clipboard \
+    brightnessctl \
+    playerctl \
+    thunar \
+    thunar-archive-plugin \
+    gvfs \
+    udisks2 \
+    hyprpaper \
+    hyprlock \
+    hypridle \
+    swaync \
+    network-manager-applet \
+    blueman \
+    pavucontrol \
+    lm_sensors
+print_success "Hyprland and components installed."
 
-# --- 17) INSTALAR APLICACIONES ---
-print_message "Instalando aplicaciones..."
-pacman -S --noconfirm chromium zathura zathura-pdf-mupdf steam neovim btop unzip wget curl
-print_success "Aplicaciones instaladas."
+# --- 17) INSTALL APPLICATIONS ---
+print_message "Installing applications..."
+pacman -S --noconfirm \
+    chromium \
+    zathura \
+    zathura-pdf-mupdf \
+    obs-studio \
+    neovim \
+    btop \
+    unzip \
+    wget \
+    curl \
+    jq \
+    socat
+print_success "Applications installed."
 
-# --- 18) INSTALAR FUENTES ---
-print_message "Instalando fuentes..."
-pacman -S --noconfirm ttf-jetbrains-mono-nerd ttf-font-awesome noto-fonts noto-fonts-emoji ttf-dejavu ttf-liberation ttf-roboto ttf-ubuntu-font-family
-print_success "Fuentes instaladas."
+# --- 18) INSTALL FONTS ---
+print_message "Installing fonts..."
+pacman -S --noconfirm \
+    ttf-jetbrains-mono-nerd \
+    ttf-font-awesome \
+    noto-fonts \
+    noto-fonts-emoji \
+    ttf-dejavu \
+    ttf-liberation \
+    ttf-roboto \
+    ttf-ubuntu-font-family
+print_success "Fonts installed."
 
-# --- 19) INSTALAR HERRAMIENTAS DE DESARROLLO ---
-print_message "Instalando herramientas de desarrollo..."
-pacman -S --noconfirm gcc clang cmake ninja meson gdb lldb python python-pip nodejs npm jdk-openjdk sqlite lua typescript
-print_success "Herramientas de desarrollo instaladas."
+# --- 19) INSTALL DEVELOPMENT TOOLS ---
+print_message "Installing development tools..."
+pacman -S --noconfirm \
+    gcc \
+    clang \
+    gdb \
+    lldb \
+    make \
+    python \
+    python-pip \
+    nodejs \
+    npm \
+    lua \
+    sqlite
+print_success "Development tools installed."
 
-# --- 20) INSTALAR TEMAS Y CONFIGURACIÓN GTK/QT ---
-print_message "Instalando temas..."
-pacman -S --noconfirm adwaita-icon-theme gnome-themes-extra qt5-wayland qt6-wayland qt5ct xdg-utils
-print_success "Temas instalados."
+# --- 20) INSTALL THEMES AND GTK/QT CONFIGURATION ---
+print_message "Installing themes..."
+pacman -S --noconfirm \
+    adwaita-icon-theme \
+    gnome-themes-extra \
+    qt5-wayland \
+    qt6-wayland \
+    qt5ct \
+    xdg-utils
+print_success "Themes installed."
 
-# --- 21) INSTALAR BLUETOOTH Y AUDIO ---
-print_message "Instalando soporte de Bluetooth y audio..."
-pacman -S --noconfirm bluez bluez-utils pulseaudio-bluetooth
-print_success "Bluetooth y audio instalados."
+# --- 21) INSTALL BLUETOOTH AND AUDIO ---
+print_message "Installing Bluetooth and audio support..."
+pacman -S --noconfirm bluez bluez-utils
+print_success "Bluetooth and audio installed."
 
-# --- 22) INSTALAR HERRAMIENTAS ADICIONALES ---
-print_message "Instalando herramientas adicionales..."
-pacman -S --noconfirm vulkan-tools vulkan-validation-layers sdl2 ddcutil
-print_success "Herramientas adicionales instaladas."
+# --- 22) INSTALL ADDITIONAL TOOLS ---
+print_message "Installing additional tools..."
+pacman -S --noconfirm vulkan-tools ddcutil libnotify
+print_success "Additional tools installed."
 
-# --- 23) REGENERAR INITRAMFS ---
-print_message "Regenerando initramfs con configuración completa..."
+# --- 23) REGENERATE INITRAMFS ---
+print_message "Regenerating initramfs with complete configuration..."
 mkinitcpio -P
-print_success "Initramfs regenerado."
+print_success "Initramfs regenerated."
 
-# --- 24) CONFIGURAR GRUB ---
-print_message "Configurando GRUB..."
+# --- 24) CONFIGURE GRUB ---
+print_message "Configuring GRUB..."
 sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
-print_success "GRUB configurado."
+print_success "GRUB configured."
 
-# --- 25) CREAR GRUPOS NECESARIOS ---
-print_message "Creando grupos necesarios..."
+# --- 25) CREATE NECESSARY GROUPS ---
+print_message "Creating necessary groups..."
 groupadd -f wheel
 groupadd -f video
 groupadd -f audio
@@ -230,28 +294,28 @@ groupadd -f storage
 groupadd -f optical
 groupadd -f network
 groupadd -f power
-print_success "Grupos creados."
+print_success "Groups created."
 
-# --- 26) CREAR USUARIO ---
-print_message "Creando usuario 'antonio'..."
+# --- 26) CREATE USER ---
+print_message "Creating user 'antonio'..."
 useradd -m -G wheel,video,audio,storage,optical,network,power -s /bin/bash antonio
-print_message "Configura la contraseña para el usuario 'antonio':"
+print_message "Configure password for user 'antonio':"
 passwd antonio
 
-print_message "Configurando privilegios sudo para el usuario 'antonio'..."
+print_message "Configuring sudo privileges for user 'antonio'..."
 echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
-print_success "Usuario creado con privilegios sudo."
+print_success "User created with sudo privileges."
 
-# --- 27) HABILITAR SERVICIOS ---
-print_message "Habilitando servicios..."
+# --- 27) ENABLE SERVICES ---
+print_message "Enabling services..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable fstrim.timer
-print_success "Servicios habilitados."
+print_success "Services enabled."
 
-# --- 28) CONFIGURAR TEMA OSCURO Y VARIABLES DE ENTORNO ---
-print_message "Configurando tema oscuro para GTK y Qt..."
+# --- 28) CONFIGURE DARK THEME AND ENVIRONMENT VARIABLES ---
+print_message "Configuring dark theme for GTK and Qt..."
 mkdir -p /etc/gtk-3.0 /etc/gtk-4.0
 cat > /etc/gtk-3.0/settings.ini << EOF
 [Settings]
@@ -275,57 +339,25 @@ EOF
 cp /etc/gtk-3.0/settings.ini /etc/gtk-4.0/settings.ini
 
 cat > /etc/environment << EOF
-# Tema oscuro para Qt y GTK
 QT_QPA_PLATFORMTHEME=qt5ct
 GTK_THEME=Adwaita-dark
 EOF
-print_success "Tema oscuro configurado."
+print_success "Dark theme configured."
 
-# --- 29) CONFIGURAR ENTORNO DE ESCRITORIO ---
-print_message "Configurando entorno Hyprland, Waybar y Alacritty..."
+# --- 29) CONFIGURE DESKTOP ENVIRONMENT ---
+print_message "Configuring Hyprland, Quickshell and Alacritty..."
 
-# Crear directorios de configuración
-mkdir -p /home/antonio/.config/{hypr/scripts,waybar,alacritty,qt5ct,gtk-3.0,gtk-4.0,wofi}
+mkdir -p /home/antonio/.config/{hypr/scripts,quickshell/widgets,quickshell/scripts,alacritty,qt5ct,gtk-3.0,gtk-4.0,wofi}
 mkdir -p /home/antonio/Imágenes/Capturas
 mkdir -p /home/antonio/Wallpapers
 
-# Script para cambiar el fondo de pantalla
-cat > /home/antonio/.config/hypr/scripts/wallpaper-changer.sh << 'EOSH'
-#!/bin/bash
-WALLPAPERS_DIR="$HOME/Wallpapers"
-if [ ! -d "$WALLPAPERS_DIR" ] || [ -z "$(ls -A "$WALLPAPERS_DIR")" ]; then
-    notify-send "Error" "No hay fondos de pantalla en $WALLPAPERS_DIR" -i dialog-error
-    exit 1
-fi
-WALLPAPERS=("$WALLPAPERS_DIR"/*)
-RANDOM_WALLPAPER=${WALLPAPERS[$RANDOM % ${#WALLPAPERS[@]}]}
-MONITOR=${1:-"eDP-1"}
-sed -i "s|wallpaper = $MONITOR,.*|wallpaper = $MONITOR,$RANDOM_WALLPAPER|g" "$HOME/.config/hypr/hyprpaper.conf"
-killall hyprpaper
-hyprpaper &
-notify-send "Fondo cambiado" "Nuevo fondo: $RANDOM_WALLPAPER" -i dialog-information
-EOSH
-chmod +x /home/antonio/.config/hypr/scripts/wallpaper-changer.sh
-
-# Configuración de hyprpaper
-cat > /home/antonio/.config/hypr/hyprpaper.conf << EOF
-# Para añadir fondos, coloca imágenes en ~/Wallpapers y añade líneas como las siguientes:
-# preload = /home/antonio/Wallpapers/tu-imagen.jpg
-# wallpaper = HDMI-A-1,/home/antonio/Wallpapers/tu-imagen.jpg
-# wallpaper = eDP-1,/home/antonio/Wallpapers/tu-imagen.jpg
-EOF
-
-# Configuración de Hyprland (CORREGIDA)
+# --- HYPRLAND CONFIGURATION ---
 cat > /home/antonio/.config/hypr/hyprland.conf << 'EOHYPR'
-# Hyprland configuration file - Complete and production-ready configuration
-# This file manages the complete Hyprland window manager configuration
-
+# Hyprland configuration file
+# Complete configuration for Nvidia RTX 3080 + AMD Ryzen 9 5900HX
 
 # --- MONITORS ---
-# Monitor ASUS 2K - Configuración óptima: 2K@144Hz con escala 1.25
 monitor=HDMI-A-1,2560x1440@144,-2048x0,1.25
-
-# Laptop eDP-1 a la derecha
 monitor=eDP-1,2560x1600@165,0x0,1.6
 
 # --- PROGRAMS ---
@@ -334,9 +366,10 @@ $fileManager = thunar
 $menu = wofi --show drun
 
 # --- AUTOSTART ---
-exec-once = waybar
-exec-once = hyprpaper
+exec-once = swww-daemon
+exec-once = quickshell
 exec-once = blueman-applet
+exec-once = gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 12'
 exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = nm-applet
 exec-once = swaync
@@ -432,15 +465,9 @@ input {
     }
 }
 
-device {
-    name = epic-mouse-v1
-    sensitivity = -0.5
-}
-
 # --- KEYBINDINGS ---
 $mainMod = SUPER
 
-# Application launchers
 bind = $mainMod, Q, exec, $terminal
 bind = $mainMod, C, killactive,
 bind = $mainMod, M, exit,
@@ -451,25 +478,21 @@ bind = $mainMod, P, pseudo,
 bind = $mainMod, T, togglesplit,
 bind = $mainMod, F, fullscreen,
 
-# Focus movement (VIM style)
 bind = $mainMod, h, movefocus, l
 bind = $mainMod, l, movefocus, r
 bind = $mainMod, k, movefocus, u
 bind = $mainMod, j, movefocus, d
 
-# Move windows (VIM style)
 bind = $mainMod SHIFT, h, movewindow, l
 bind = $mainMod SHIFT, l, movewindow, r
 bind = $mainMod SHIFT, k, movewindow, u
 bind = $mainMod SHIFT, j, movewindow, d
 
-# Resize windows (VIM style)
 bind = $mainMod CTRL, h, resizeactive, -40 0
 bind = $mainMod CTRL, l, resizeactive, 40 0
 bind = $mainMod CTRL, k, resizeactive, 0 -40
 bind = $mainMod CTRL, j, resizeactive, 0 40
 
-# Workspace switching
 bind = $mainMod, 1, workspace, 1
 bind = $mainMod, 2, workspace, 2
 bind = $mainMod, 3, workspace, 3
@@ -481,7 +504,6 @@ bind = $mainMod, 8, workspace, 8
 bind = $mainMod, 9, workspace, 9
 bind = $mainMod, 0, workspace, 10
 
-# Move window to workspace
 bind = $mainMod SHIFT, 1, movetoworkspace, 1
 bind = $mainMod SHIFT, 2, movetoworkspace, 2
 bind = $mainMod SHIFT, 3, movetoworkspace, 3
@@ -493,259 +515,1050 @@ bind = $mainMod SHIFT, 8, movetoworkspace, 8
 bind = $mainMod SHIFT, 9, movetoworkspace, 9
 bind = $mainMod SHIFT, 0, movetoworkspace, 10
 
-# Special workspace
 bind = $mainMod, S, togglespecialworkspace, magic
 bind = $mainMod SHIFT, S, movetoworkspace, special:magic
 
-# Mouse workspace switching
 bind = $mainMod, mouse_down, workspace, e+1
 bind = $mainMod, mouse_up, workspace, e-1
 
-# Mouse window manipulation
 bindm = $mainMod, mouse:272, movewindow
 bindm = $mainMod, mouse:273, resizewindow
 
-# Volume controls
 binde = , XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+
 binde = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
 bind = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
 bind = , XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
 
-# Brightness controls
 binde = , XF86MonBrightnessUp, exec, brightnessctl s 10%+
 binde = , XF86MonBrightnessDown, exec, brightnessctl s 10%-
 
-# Media controls
 bindl = , XF86AudioNext, exec, playerctl next
 bindl = , XF86AudioPrev, exec, playerctl previous
 bindl = , XF86AudioPlay, exec, playerctl play-pause
 
-# Screenshots
 bind = , Print, exec, grim -g "$(slurp)" - | wl-copy
 bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/Capturas/captura-$(date +'%Y-%m-%d-%H%M%S').png
-bind = SUPER_CTRL, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
 
-# --- WINDOW RULES ---
 windowrulev2 = float,class:^(pavucontrol)$
 windowrulev2 = float,class:^(blueman-manager)$
 windowrulev2 = float,class:^(nm-connection-editor)$
-windowrulev2 = float,title:^(Steam - News)$
 windowrulev2 = suppressevent maximize, class:.*
 windowrulev2 = opacity 1.0 override,class:^(code-oss|Code)$
 EOHYPR
 
-# Configuración de Waybar (config.jsonc) - ACTUALIZADA
-cat > /home/antonio/.config/waybar/config.jsonc << 'EOWAYBAR'
-{
-    "layer": "top",
-    "position": "top",
-    "height": 28,
-    "spacing": 0,
-    "modules-left": ["hyprland/workspaces"],
-    "modules-center": [],
-    "modules-right": ["custom/cpu", "custom/gpu", "custom/ram", "battery", "network", "bluetooth", "clock"],
-    
-    "hyprland/workspaces": {
-        "format": "{id}",
-        "on-click": "activate",
-        "sort-by-number": true
-    },
-    
-    "custom/cpu": {
-        "exec": "echo \"CPU: $(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf \"%.0f%%\", usage}') $(sensors 2>/dev/null | grep 'Package' | awk '{print $4}' | sed 's/+//' | sed 's/\\..*°C/°C/' | head -1 || echo '')\"",
-        "interval": 2,
-        "tooltip": false,
-        "format": "{}"
-    },
-    
-    "custom/gpu": {
-        "exec": "echo \"GPU: $(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 'N/A')% $(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | awk '{print $1\"°C\"}' || echo '')\"",
-        "interval": 2,
-        "tooltip": false,
-        "format": "{}"
-    },
-    
-    "custom/ram": {
-        "exec": "echo \"RAM: $(free -h | awk '/^Mem:/ {print $3}' | sed 's/Gi/G/')\"",
-        "interval": 2,
-        "tooltip": false,
-        "format": "{}"
-    },
-    
-    "battery": {
-        "states": {
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "BAT: {capacity}%",
-        "format-charging": "CHG: {capacity}%",
-        "format-plugged": "AC: {capacity}%",
-        "tooltip": false
-    },
-    
-    "network": {
-        "format-wifi": "WiFi: {signalStrength}%",
-        "format-ethernet": "LAN: OK",
-        "format-disconnected": "NET: OFF",
-        "tooltip": false,
-        "on-click": "nm-connection-editor"
-    },
-    
-    "bluetooth": {
-        "format": "BT: ON",
-        "format-on": "BT: ON",
-        "format-off": "BT: OFF",
-        "format-connected": "BT: {num_connections}",
-        "format-disabled": "BT: DIS",
-        "tooltip": false,
-        "on-click": "blueman-manager"
-    },
-    
-    "clock": {
-        "format": "{:%H:%M}",
-        "tooltip": true,
-        "tooltip-format": "<tt><small>{calendar}</small></tt>",
-        "calendar": {
-            "mode": "month",
-            "mode-mon-col": 3,
-            "weeks-pos": "left",
-            "on-scroll": 1,
-            "format": {
-                "months": "<span color='#ffffff'><b>{}</b></span>",
-                "days": "<span color='#ffffff'><b>{}</b></span>",
-                "weeks": "<span color='#999999'><b>W{}</b></span>",
-                "weekdays": "<span color='#cccccc'><b>{}</b></span>",
-                "today": "<span color='#888888'><b><u>{}</u></b></span>"
+# --- QUICKSHELL MAIN CONFIGURATION ---
+cat > /home/antonio/.config/quickshell/shell.qml << 'EOSHELL'
+// shell.qml
+// Main entry point for the Quickshell bar configuration
+
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
+import Quickshell.Hyprland
+import "widgets"
+
+ShellRoot {
+    id: root
+
+    property int globalVolume: 50
+
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: barWindow
+            required property var modelData
+            property int monitorIndex: {
+                let screens = Quickshell.screens;
+                for (let i = 0; i < screens.length; i++) {
+                    if (screens[i].name === modelData.name) return i + 1;
+                }
+                return 1;
+            }
+
+            screen: modelData
+            anchors {
+                top: true
+                left: true
+                right: true
+            }
+            implicitHeight: 32
+            color: "#1e1e23"
+
+            WlrLayershell.namespace: "quickshell:bar"
+            WlrLayershell.layer: WlrLayer.Top
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                spacing: 12
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignLeft
+                    spacing: 8
+
+                    ToolButton {
+                        label: "CLR"
+                        tooltip: "Color Picker (copies hex to clipboard)"
+                        onClicked: colorPickerScript.running = true
+                    }
+
+                    ToolButton {
+                        label: "WP"
+                        tooltip: "Change Wallpaper"
+                        onClicked: wallpaperScript.running = true
+                    }
+
+                    ToolButton {
+                        label: "MON"
+                        tooltip: "Monitor Settings"
+                        onClicked: monitorScript.running = true
+                    }
+
+                    Rectangle {
+                        width: 1
+                        height: 20
+                        color: "#404040"
+                    }
+
+                    WorkspaceIndicator {
+                        monitorNumber: barWindow.monitorIndex
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                ClockWidget {
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                Item { Layout.fillWidth: true }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    spacing: 12
+
+                    CpuIndicator {}
+                    GpuIndicator {}
+                    RamIndicator {}
+                    NetworkIndicator {}
+                    BluetoothIndicator {}
+                    AudioIndicator {
+                        onVolumeAdjusted: function(vol) {
+                            root.globalVolume = vol;
+                            volumeOsd.showVolume(vol);
+                        }
+                    }
+                    BatteryIndicator {}
+                }
+            }
+        }
+    }
+
+    VolumeOSD { id: volumeOsd }
+
+    Process {
+        id: colorPickerScript
+        command: ["hyprpicker", "-a", "-f", "hex"]
+        running: false
+    }
+
+    Process {
+        id: wallpaperScript
+        command: ["sh", "-c", "~/.config/quickshell/scripts/wallpaper-picker.sh"]
+        running: false
+    }
+
+    Process {
+        id: monitorScript
+        command: ["wlr-randr"]
+        running: false
+    }
+}
+EOSHELL
+
+# --- QUICKSHELL WIDGETS ---
+
+# ToolButton widget
+cat > /home/antonio/.config/quickshell/widgets/ToolButton.qml << 'EOWIDGET'
+// widgets/ToolButton.qml
+// Reusable clickable button with label and tooltip
+
+import QtQuick
+import QtQuick.Controls
+
+Rectangle {
+    id: toolButton
+    property string icon: ""
+    property string label: ""
+    property string tooltip: ""
+    signal clicked()
+
+    width: labelText.visible ? labelText.width + 16 : 28
+    height: 28
+    radius: 4
+    color: mouseArea.containsMouse ? "#3a3a45" : "transparent"
+
+    Text {
+        id: labelText
+        anchors.centerIn: parent
+        text: toolButton.label
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 10
+        font.bold: true
+        color: mouseArea.containsMouse ? "#ffffff" : "#b0b0b0"
+        visible: toolButton.label !== ""
+    }
+
+    MouseArea {
+        id: mouseArea
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: toolButton.clicked()
+    }
+
+    ToolTip {
+        visible: mouseArea.containsMouse && toolButton.tooltip !== ""
+        text: toolButton.tooltip
+        delay: 500
+    }
+}
+EOWIDGET
+
+# WorkspaceIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/WorkspaceIndicator.qml << 'EOWIDGET'
+// widgets/WorkspaceIndicator.qml
+// Displays current workspace number for the associated monitor
+
+import QtQuick
+import Quickshell.Hyprland
+
+Rectangle {
+    id: workspaceIndicator
+    property int monitorNumber: 1
+
+    width: 32
+    height: 24
+    radius: 4
+    color: "#2a2a35"
+    border.color: "#33ccff"
+    border.width: 1
+
+    Text {
+        anchors.centerIn: parent
+        text: workspaceIndicator.monitorNumber.toString()
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 14
+        font.bold: true
+        color: "#33ccff"
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+
+        onWheel: function(event) {
+            if (event.angleDelta.y > 0) {
+                Hyprland.dispatch("workspace e-1");
+            } else {
+                Hyprland.dispatch("workspace e+1");
             }
         }
     }
 }
-EOWAYBAR
+EOWIDGET
 
-# Configuración de Waybar (style.css) - ACTUALIZADA
-cat > /home/antonio/.config/waybar/style.css << 'EOWAYBARSTYLE'
-/* Waybar Minimal Dark Style - Simple White Text */
+# ClockWidget with calendar
+cat > /home/antonio/.config/quickshell/widgets/ClockWidget.qml << 'EOWIDGET'
+// widgets/ClockWidget.qml
+// Displays current time with calendar popup on click
 
-* {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 12px;
-    font-weight: 400;
-    border: none;
-    border-radius: 0;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Quickshell
+
+Item {
+    id: clockWidget
+    width: timeText.width
+    height: timeText.height
+
+    property string currentTime: Qt.formatDateTime(new Date(), "HH:mm")
+    property date currentDate: new Date()
+
+    Text {
+        id: timeText
+        text: clockWidget.currentTime
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 14
+        font.bold: true
+        color: "#ffffff"
+    }
+
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: {
+            clockWidget.currentTime = Qt.formatDateTime(new Date(), "HH:mm");
+            clockWidget.currentDate = new Date();
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: calendarPopup.visible = !calendarPopup.visible
+    }
+
+    Rectangle {
+        id: calendarPopup
+        visible: false
+        width: 220
+        height: 260
+        color: "#2a2a35"
+        radius: 8
+        border.color: "#404040"
+        border.width: 1
+
+        y: timeText.height + 8
+        x: timeText.width / 2 - width / 2
+
+        Column {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 8
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: Qt.formatDateTime(clockWidget.currentDate, "MMMM yyyy")
+                font.family: "JetBrainsMono Nerd Font"
+                font.pixelSize: 14
+                font.bold: true
+                color: "#33ccff"
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 1
+                color: "#404040"
+            }
+
+            Grid {
+                columns: 7
+                spacing: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Repeater {
+                    model: ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"]
+                    Text {
+                        width: 26
+                        height: 20
+                        horizontalAlignment: Text.AlignHCenter
+                        text: modelData
+                        font.family: "JetBrainsMono Nerd Font"
+                        font.pixelSize: 10
+                        font.bold: true
+                        color: "#888888"
+                    }
+                }
+            }
+
+            Grid {
+                columns: 7
+                spacing: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Repeater {
+                    model: clockWidget.generateCalendarDays()
+
+                    Rectangle {
+                        width: 26
+                        height: 26
+                        radius: 13
+                        color: modelData.isToday ? "#33ccff" : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.day
+                            font.family: "JetBrainsMono Nerd Font"
+                            font.pixelSize: 11
+                            color: {
+                                if (modelData.isToday) return "#1e1e23";
+                                if (modelData.isCurrentMonth) return "#ffffff";
+                                return "#555555";
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 1
+                color: "#404040"
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: Qt.formatDateTime(clockWidget.currentDate, "dddd, d 'de' MMMM")
+                font.family: "JetBrainsMono Nerd Font"
+                font.pixelSize: 11
+                color: "#b0b0b0"
+            }
+        }
+    }
+
+    function generateCalendarDays() {
+        let days = [];
+        let date = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        let firstDay = date.getDay();
+        firstDay = firstDay === 0 ? 6 : firstDay - 1;
+
+        let prevMonth = new Date(date.getFullYear(), date.getMonth(), 0);
+        for (let i = firstDay - 1; i >= 0; i--) {
+            days.push({
+                day: prevMonth.getDate() - i,
+                isCurrentMonth: false,
+                isToday: false
+            });
+        }
+
+        let daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+        let today = new Date();
+        for (let i = 1; i <= daysInMonth; i++) {
+            days.push({
+                day: i,
+                isCurrentMonth: true,
+                isToday: i === today.getDate() &&
+                         date.getMonth() === today.getMonth() &&
+                         date.getFullYear() === today.getFullYear()
+            });
+        }
+
+        let remaining = 42 - days.length;
+        for (let i = 1; i <= remaining; i++) {
+            days.push({
+                day: i,
+                isCurrentMonth: false,
+                isToday: false
+            });
+        }
+
+        return days;
+    }
 }
+EOWIDGET
 
-window#waybar {
-    background-color: rgba(30, 30, 35, 0.95);
-    color: #ffffff;
-    transition: none;
+# CpuIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/CpuIndicator.qml << 'EOWIDGET'
+// widgets/CpuIndicator.qml
+// Displays CPU usage percentage in real time
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: cpuIndicator
+    width: cpuRow.width
+    height: cpuRow.height
+
+    property int cpuUsage: 0
+
+    Row {
+        id: cpuRow
+        spacing: 4
+
+        Text {
+            text: "CPU:"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 10
+            font.bold: true
+            color: cpuIndicator.cpuUsage > 80 ? "#ff6666" : "#33ccff"
+        }
+
+        Text {
+            text: cpuIndicator.cpuUsage + "%"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 11
+            color: "#b0b0b0"
+        }
+    }
+
+    Process {
+        id: cpuCheck
+        command: ["sh", "-c", "grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf \"%.0f\", usage}'"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                cpuIndicator.cpuUsage = parseInt(this.text.trim()) || 0;
+            }
+        }
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: cpuCheck.running = true
+    }
 }
+EOWIDGET
 
-/* Workspaces */
-#workspaces {
-    margin: 0;
-    padding: 0 4px;
+# GpuIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/GpuIndicator.qml << 'EOWIDGET'
+// widgets/GpuIndicator.qml
+// Displays GPU usage percentage in real time (NVIDIA)
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: gpuIndicator
+    width: gpuRow.width
+    height: gpuRow.height
+
+    property int gpuUsage: 0
+
+    Row {
+        id: gpuRow
+        spacing: 4
+
+        Text {
+            text: "GPU:"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 10
+            font.bold: true
+            color: gpuIndicator.gpuUsage > 80 ? "#ff6666" : "#00ff99"
+        }
+
+        Text {
+            text: gpuIndicator.gpuUsage + "%"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 11
+            color: "#b0b0b0"
+        }
+    }
+
+    Process {
+        id: gpuCheck
+        command: ["sh", "-c", "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 0"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                gpuIndicator.gpuUsage = parseInt(this.text.trim()) || 0;
+            }
+        }
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: gpuCheck.running = true
+    }
 }
+EOWIDGET
 
-#workspaces button {
-    background: transparent;
-    color: #888888;
-    padding: 0 8px;
-    margin: 0 3px;
-    min-width: 26px;
-    font-weight: 500;
+# RamIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/RamIndicator.qml << 'EOWIDGET'
+// widgets/RamIndicator.qml
+// Displays RAM usage in real time
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: ramIndicator
+    width: ramRow.width
+    height: ramRow.height
+
+    property string ramUsage: "0G"
+
+    Row {
+        id: ramRow
+        spacing: 4
+
+        Text {
+            text: "RAM:"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 10
+            font.bold: true
+            color: "#ffaa00"
+        }
+
+        Text {
+            text: ramIndicator.ramUsage
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 11
+            color: "#b0b0b0"
+        }
+    }
+
+    Process {
+        id: ramCheck
+        command: ["sh", "-c", "free -h | awk '/^Mem:/ {print $3}' | sed 's/Gi/G/' | sed 's/Mi/M/'"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                ramIndicator.ramUsage = this.text.trim() || "0G";
+            }
+        }
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        onTriggered: ramCheck.running = true
+    }
 }
+EOWIDGET
 
-#workspaces button.visible {
-    color: #c0c0c0;
-    background: rgba(255, 255, 255, 0.05);
+# NetworkIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/NetworkIndicator.qml << 'EOWIDGET'
+// widgets/NetworkIndicator.qml
+// Displays network connection status
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: networkIndicator
+    width: netRow.width
+    height: netRow.height
+
+    property string networkStatus: "NET"
+    property bool connected: false
+
+    Row {
+        id: netRow
+        spacing: 4
+
+        Text {
+            text: networkIndicator.networkStatus
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 10
+            font.bold: true
+            color: networkIndicator.connected ? "#00ff99" : "#ff6666"
+        }
+    }
+
+    Process {
+        id: networkCheck
+        command: ["sh", "-c", "nmcli -t -f TYPE,STATE dev | grep -q 'wifi:connected' && echo 'WIFI' || (nmcli -t -f TYPE,STATE dev | grep -q 'ethernet:connected' && echo 'ETH' || echo 'OFF')"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let result = this.text.trim();
+                networkIndicator.networkStatus = result;
+                networkIndicator.connected = (result !== "OFF");
+            }
+        }
+    }
+
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        onTriggered: networkCheck.running = true
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: nmEditor.running = true
+    }
+
+    Process {
+        id: nmEditor
+        command: ["nm-connection-editor"]
+        running: false
+    }
 }
+EOWIDGET
 
-#workspaces button.active {
-    color: #ffffff;
-    background: rgba(150, 150, 150, 0.3);
-    font-weight: bold;
+# BluetoothIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/BluetoothIndicator.qml << 'EOWIDGET'
+// widgets/BluetoothIndicator.qml
+// Displays Bluetooth status
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: btIndicator
+    width: btText.width
+    height: btText.height
+
+    property string btStatus: "BT"
+    property bool enabled: false
+
+    Text {
+        id: btText
+        text: btIndicator.btStatus
+        font.family: "JetBrainsMono Nerd Font"
+        font.pixelSize: 10
+        font.bold: true
+        color: btIndicator.enabled ? "#33ccff" : "#666666"
+    }
+
+    Process {
+        id: btCheck
+        command: ["sh", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' && echo 'BT:ON' || echo 'BT:OFF'"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let result = this.text.trim();
+                btIndicator.enabled = result === "BT:ON";
+            }
+        }
+    }
+
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        onTriggered: btCheck.running = true
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: btManager.running = true
+    }
+
+    Process {
+        id: btManager
+        command: ["blueman-manager"]
+        running: false
+    }
 }
+EOWIDGET
 
-#workspaces button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+# AudioIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/AudioIndicator.qml << 'EOWIDGET'
+// widgets/AudioIndicator.qml
+// Displays audio volume with scroll-to-adjust and OSD trigger
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: audioIndicator
+    width: audioRow.width
+    height: audioRow.height
+
+    property int volume: 50
+    property bool muted: false
+    property string icon: "VOL"
+
+    signal volumeAdjusted(int vol)
+
+    Row {
+        id: audioRow
+        spacing: 4
+
+        Text {
+            text: audioIndicator.icon
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 10
+            font.bold: true
+            color: audioIndicator.muted ? "#ff6666" : "#33ccff"
+        }
+
+        Text {
+            text: audioIndicator.volume + "%"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 11
+            color: "#b0b0b0"
+        }
+    }
+
+    Process {
+        id: volumeCheck
+        command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let output = this.text.trim();
+                audioIndicator.muted = output.includes("[MUTED]");
+                let match = output.match(/Volume: ([0-9.]+)/);
+                if (match) {
+                    audioIndicator.volume = Math.round(parseFloat(match[1]) * 100);
+                }
+                audioIndicator.icon = audioIndicator.muted ? "MUT" : "VOL";
+            }
+        }
+    }
+
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: volumeCheck.running = true
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+
+        onClicked: pavucontrol.running = true
+
+        onWheel: function(event) {
+            if (event.angleDelta.y > 0) {
+                volumeUp.running = true;
+            } else {
+                volumeDown.running = true;
+            }
+        }
+    }
+
+    Process {
+        id: volumeUp
+        command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"]
+        running: false
+        onRunningChanged: {
+            if (!running) {
+                volumeCheck.running = true;
+                Qt.callLater(function() {
+                    audioIndicator.volumeAdjusted(audioIndicator.volume);
+                });
+            }
+        }
+    }
+
+    Process {
+        id: volumeDown
+        command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"]
+        running: false
+        onRunningChanged: {
+            if (!running) {
+                volumeCheck.running = true;
+                Qt.callLater(function() {
+                    audioIndicator.volumeAdjusted(audioIndicator.volume);
+                });
+            }
+        }
+    }
+
+    Process {
+        id: pavucontrol
+        command: ["pavucontrol"]
+        running: false
+    }
 }
+EOWIDGET
 
-/* All right modules - White color */
-#custom-cpu,
-#custom-gpu,
-#custom-ram,
-#battery,
-#network,
-#bluetooth,
-#clock {
-    color: #ffffff;
-    padding: 0 10px;
-    margin: 0;
-    font-family: "JetBrains Mono", monospace;
+# BatteryIndicator widget
+cat > /home/antonio/.config/quickshell/widgets/BatteryIndicator.qml << 'EOWIDGET'
+// widgets/BatteryIndicator.qml
+// Displays battery percentage and charging status
+
+import QtQuick
+import Quickshell.Io
+
+Item {
+    id: batteryIndicator
+    width: batRow.width
+    height: batRow.height
+
+    property int percentage: 100
+    property bool charging: false
+
+    Row {
+        id: batRow
+        spacing: 4
+
+        Text {
+            text: batteryIndicator.charging ? "CHG" : "BAT"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 10
+            font.bold: true
+            color: {
+                if (batteryIndicator.charging) return "#00ff99";
+                if (batteryIndicator.percentage <= 20) return "#ff6666";
+                if (batteryIndicator.percentage <= 40) return "#ffaa00";
+                return "#ffffff";
+            }
+        }
+
+        Text {
+            text: batteryIndicator.percentage + "%"
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: 11
+            color: "#b0b0b0"
+        }
+    }
+
+    Process {
+        id: batteryCheck
+        command: ["sh", "-c", "cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || echo 100"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                batteryIndicator.percentage = parseInt(this.text.trim()) || 100;
+            }
+        }
+    }
+
+    Process {
+        id: chargingCheck
+        command: ["sh", "-c", "cat /sys/class/power_supply/BAT0/status 2>/dev/null || echo 'Full'"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                batteryIndicator.charging = (this.text.trim() === "Charging");
+            }
+        }
+    }
+
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        onTriggered: {
+            batteryCheck.running = true;
+            chargingCheck.running = true;
+        }
+    }
 }
+EOWIDGET
 
-/* Add subtle separators */
-#custom-gpu {
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    margin-left: 2px;
+# VolumeOSD widget
+cat > /home/antonio/.config/quickshell/widgets/VolumeOSD.qml << 'EOWIDGET'
+// widgets/VolumeOSD.qml
+// On-screen display for volume changes
+
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+
+PanelWindow {
+    id: osdWindow
+    visible: false
+
+    anchors {
+        bottom: true
+        left: true
+        right: true
+    }
+    margins.bottom: 100
+
+    implicitWidth: 200
+    implicitHeight: 60
+    color: "transparent"
+
+    WlrLayershell.namespace: "quickshell:osd"
+    WlrLayershell.layer: WlrLayer.Overlay
+
+    property int currentVolume: 0
+
+    function showVolume(vol) {
+        currentVolume = vol;
+        visible = true;
+        hideTimer.restart();
+    }
+
+    Timer {
+        id: hideTimer
+        interval: 1500
+        onTriggered: osdWindow.visible = false
+    }
+
+    Item {
+        anchors.fill: parent
+
+        Rectangle {
+            width: 200
+            height: 60
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            radius: 12
+            color: "#e01e1e23"
+            border.color: "#404040"
+            border.width: 1
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "VOL"
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "#ffffff"
+                }
+
+                Rectangle {
+                    width: 160
+                    height: 6
+                    radius: 3
+                    color: "#404040"
+
+                    Rectangle {
+                        width: parent.width * (osdWindow.currentVolume / 100)
+                        height: parent.height
+                        radius: 3
+                        color: "#33ccff"
+
+                        Behavior on width {
+                            NumberAnimation { duration: 100 }
+                        }
+                    }
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: osdWindow.currentVolume + "%"
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: 12
+                    color: "#b0b0b0"
+                }
+            }
+        }
+    }
 }
+EOWIDGET
 
-#custom-ram {
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    margin-left: 2px;
-}
+# --- QUICKSHELL SCRIPTS ---
 
-#battery {
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    margin-left: 2px;
-}
+# Wallpaper picker script
+cat > /home/antonio/.config/quickshell/scripts/wallpaper-picker.sh << 'EOSCRIPT'
+#!/bin/bash
+# wallpaper-picker.sh
+# Opens zenity file picker to select a wallpaper and applies it with swww
 
-/* Clock */
-#clock {
-    padding-right: 10px;
-    font-weight: 500;
-}
+WALLPAPER_DIR="$HOME/Wallpapers"
+SELECTED_FILE=$(zenity --file-selection --title="Select Wallpaper" --filename="$WALLPAPER_DIR/" --file-filter="Images | *.png *.jpg *.jpeg *.webp *.gif" 2>/dev/null)
 
-/* Hover effects */
-#custom-cpu:hover,
-#custom-gpu:hover,
-#custom-ram:hover,
-#battery:hover,
-#network:hover,
-#bluetooth:hover,
-#clock:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
+if [ -z "$SELECTED_FILE" ]; then
+    exit 0
+fi
 
-/* Tooltip styling */
-tooltip {
-    background: rgba(20, 20, 25, 0.98);
-    border: 1px solid rgba(150, 150, 150, 0.3);
-    border-radius: 4px;
-    padding: 8px;
-}
+pgrep -x swww-daemon > /dev/null || swww-daemon &
+sleep 0.2
 
-tooltip label {
-    color: #ffffff;
-    font-size: 11px;
-}
+swww img "$SELECTED_FILE" \
+    --transition-type grow \
+    --transition-duration 1 \
+    --transition-fps 60
 
-/* Calendar in tooltip */
-tooltip calendar {
-    background: transparent;
-    color: #ffffff;
-}
-EOWAYBARSTYLE
+notify-send "Wallpaper Changed" "$(basename "$SELECTED_FILE")" -i preferences-desktop-wallpaper
+EOSCRIPT
 
-# Configuración de Alacritty (CORREGIDA)
+chmod +x /home/antonio/.config/quickshell/scripts/wallpaper-picker.sh
+
+# --- ALACRITTY CONFIGURATION ---
 cat > /home/antonio/.config/alacritty/alacritty.toml << 'EOALAC'
-# Alacritty Terminal Configuration - Final Version with Blue Selection
-# This configuration provides a complete terminal setup with warm gray background and custom shortcuts
-
 [window]
 opacity = 0.95
 dynamic_padding = true
@@ -772,90 +1585,41 @@ italic = { family = "JetBrainsMono Nerd Font", style = "Italic" }
 bold_italic = { family = "JetBrainsMono Nerd Font", style = "Bold Italic" }
 size = 12.0
 
-[font.offset]
-x = 0
-y = 0
-
-[font.glyph_offset]
-x = 0
-y = 0
-
-# Warm gray background with White Text and Soft Yellow for Warnings
 [colors.primary]
 background = "#2b2b2b"
 foreground = "#ffffff"
-dim_foreground = "#f8f8f2"
-bright_foreground = "#ffffff"
 
 [colors.cursor]
 text = "#2b2b2b"
 cursor = "#f8f8f2"
 
-[colors.vi_mode_cursor]
-text = "#2b2b2b"
-cursor = "#f8f8f2"
-
-[colors.search]
-matches = { foreground = "#2b2b2b", background = "#e6db74" }
-focused_match = { foreground = "#2b2b2b", background = "#a6e22e" }
-
-[colors.hints]
-start = { foreground = "#2b2b2b", background = "#e6db74" }
-end = { foreground = "#2b2b2b", background = "#a6e22e" }
-
-[colors.line_indicator]
-foreground = "None"
-background = "None"
-
-[colors.footer_bar]
-foreground = "#ffffff"
-background = "#2b2b2b"
-
 [colors.selection]
 text = "#ffffff"
 background = "#4169e1"
 
-# Normal colors - Warm gray background palette with soft yellow for errors
 [colors.normal]
 black = "#2b2b2b"
-red = "#e6db74"      # Soft yellow for errors/warnings instead of red
+red = "#e6db74"
 green = "#a6e22e"
-yellow = "#f4bf75"   # Brighter yellow
+yellow = "#f4bf75"
 blue = "#66d9ef"
 magenta = "#ae81ff"
 cyan = "#66d9ef"
 white = "#ffffff"
 
-# Bright colors
 [colors.bright]
 black = "#75715e"
-red = "#f4bf75"      # Soft yellow for bright errors
+red = "#f4bf75"
 green = "#a6e22e"
-yellow = "#fcf5ae"   # Even brighter yellow
+yellow = "#fcf5ae"
 blue = "#66d9ef"
 magenta = "#ae81ff"
 cyan = "#a1efe4"
 white = "#ffffff"
 
-# Dim colors
-[colors.dim]
-black = "#2b2b2b"
-red = "#d4c96e"      # Dimmed yellow
-green = "#87c22f"
-yellow = "#c7b55a"
-blue = "#55b3cc"
-magenta = "#9869d0"
-cyan = "#55b3cc"
-white = "#d5d5d0"
-
 [cursor]
 style = { shape = "Block", blinking = "On" }
 unfocused_hollow = true
-thickness = 0.15
-
-[cursor.vi_mode_style]
-shape = "Block"
-blinking = "Off"
 
 [terminal]
 osc52 = "OnlyCopy"
@@ -867,7 +1631,6 @@ args = ["--login"]
 [env]
 TERM = "xterm-256color"
 
-# Inverted keyboard shortcuts as requested
 [[keyboard.bindings]]
 key = "C"
 mods = "Control"
@@ -881,17 +1644,7 @@ action = "Paste"
 [[keyboard.bindings]]
 key = "C"
 mods = "Control|Shift"
-chars = "\u0003"  # Send interrupt signal (Ctrl+C)
-
-[[keyboard.bindings]]
-key = "V"
-mods = "Control|Shift"
-action = "PasteSelection"
-
-[[keyboard.bindings]]
-key = "Insert"
-mods = "Shift"
-action = "PasteSelection"
+chars = "\u0003"
 
 [[keyboard.bindings]]
 key = "Key0"
@@ -904,68 +1657,9 @@ mods = "Control"
 action = "IncreaseFontSize"
 
 [[keyboard.bindings]]
-key = "Plus"
-mods = "Control"
-action = "IncreaseFontSize"
-
-[[keyboard.bindings]]
-key = "NumpadAdd"
-mods = "Control"
-action = "IncreaseFontSize"
-
-[[keyboard.bindings]]
 key = "Minus"
 mods = "Control"
 action = "DecreaseFontSize"
-
-[[keyboard.bindings]]
-key = "NumpadSubtract"
-mods = "Control"
-action = "DecreaseFontSize"
-
-[[keyboard.bindings]]
-key = "L"
-mods = "Control"
-action = "ClearLogNotice"
-
-[[keyboard.bindings]]
-key = "L"
-mods = "Control|Shift"
-action = "ClearHistory"
-
-[[keyboard.bindings]]
-key = "PageUp"
-mods = "Shift"
-mode = "~Alt"
-action = "ScrollPageUp"
-
-[[keyboard.bindings]]
-key = "PageDown"
-mods = "Shift"
-mode = "~Alt"
-action = "ScrollPageDown"
-
-[[keyboard.bindings]]
-key = "Home"
-mods = "Shift"
-mode = "~Alt"
-action = "ScrollToTop"
-
-[[keyboard.bindings]]
-key = "End"
-mods = "Shift"
-mode = "~Alt"
-action = "ScrollToBottom"
-
-[[keyboard.bindings]]
-key = "N"
-mods = "Control|Shift"
-action = "SpawnNewInstance"
-
-[[keyboard.bindings]]
-key = "Space"
-mods = "Control|Shift"
-action = "ToggleViMode"
 
 [[keyboard.bindings]]
 key = "F11"
@@ -975,28 +1669,16 @@ action = "ToggleFullscreen"
 hide_when_typing = true
 
 [selection]
-semantic_escape_chars = ",│`|:\"' ()[]{}<>\t"
 save_to_clipboard = false
-
-[bell]
-animation = "Linear"
-duration = 0
-command = "None"
-
-[debug]
-render_timer = false
-persistent_logging = false
-log_level = "Warn"
-print_events = false
 EOALAC
 
-# Configuración de Wofi
+# --- WOFI CONFIGURATION ---
 cat > /home/antonio/.config/wofi/config << EOF
 width=600
 height=400
 location=center
 show=drun
-prompt=Buscar
+prompt=Search
 filter_rate=100
 allow_markup=true
 no_actions=true
@@ -1042,9 +1724,8 @@ window {
 }
 EOF
 
-# Configuración de Bash
+# --- BASH CONFIGURATION ---
 cat > /home/antonio/.bashrc << 'EORC'
-# .bashrc
 [[ $- != *i* ]] && return
 alias ls='ls --color=auto'
 alias ll='ls -alF'
@@ -1052,71 +1733,65 @@ alias grep='grep --color=auto'
 PS1='[\u@\h \W]\$ '
 export EDITOR=nvim
 export VISUAL=nvim
-export PATH="$PATH:$HOME/.cargo/bin"
-export PATH="$PATH:/usr/lib/jvm/default/bin"
-export PATH="$PATH:$HOME/go/bin"
-export GOPATH="$HOME/go"
-export GEM_HOME="$HOME/.gem"
-export PATH="$PATH:$GEM_HOME/bin"
-[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 EORC
 
-# Configuración de perfil
 cat > /home/antonio/.profile << 'EOPF'
-# Variables de entorno para Wayland
 export QT_QPA_PLATFORMTHEME="qt5ct"
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export GTK_THEME="Adwaita-dark"
 export MOZ_ENABLE_WAYLAND=1
-# Cargar bashrc
 if [ -n "$BASH_VERSION" ] && [ -f "$HOME/.bashrc" ]; then
     . "$HOME/.bashrc"
 fi
 EOPF
 
-# Recomendaciones post-instalación
-cat > /home/antonio/recomendaciones-post-instalacion.txt << 'EOTXT'
-=== RECOMENDACIONES POST-INSTALACIÓN ===
+# --- POST-INSTALLATION RECOMMENDATIONS ---
+cat > /home/antonio/post-installation-notes.txt << 'EOTXT'
+=== POST-INSTALLATION NOTES ===
 
-Instalar yay (AUR helper):
-sudo pacman -S --needed git base-devel
-git clone https://aur.archlinux.org/yay.git
-cd yay
-makepkg -si
+KEYBOARD SHORTCUTS:
+- Switch between US/ES keyboard: Alt+Shift
+- Open terminal: Super+Q
+- Open file manager: Super+E
+- Open application launcher: Super+R
+- Close window: Super+C
+- Toggle fullscreen: Super+F
+- Screenshot (select area): Print or Super+Z
 
+BAR TOOLS:
+- CLR: Color picker (copies hex to clipboard)
+- WP: Wallpaper picker (opens file dialog)
+- MON: Monitor configuration
 
-NOTAS IMPORTANTES:
-- Cambiar entre teclado US y ES: Alt+Shift
-- Cambiar fondo de pantalla: Ctrl+Super+T
-- Abrir lanzador de aplicaciones (Wofi): Super+R
+SYSTEM INFO (right side of bar):
+- CPU/GPU/RAM usage in real time
+- Network, Bluetooth, Volume, Battery status
 
-Para mayor seguridad, considera instalar y configurar un firewall:
+For security, consider installing a firewall:
   sudo pacman -S ufw
   sudo ufw enable
   sudo systemctl enable ufw
 EOTXT
 
-# Cambiar propiedad de los archivos
 chown -R antonio:antonio /home/antonio/
-print_success "Configuración del entorno de escritorio finalizada."
-print_message "La instalación base ha sido completada."
-print_warning "Escribe 'exit', desmonta las particiones con 'umount -R /mnt' y reinicia."
+print_success "Desktop environment configuration completed."
+print_message "Base installation completed."
+print_warning "Type 'exit', unmount partitions with 'umount -R /mnt' and reboot."
 EOL
 
-# Hacer ejecutable el script post-chroot
 chmod +x /mnt/root/post-chroot.sh
 
-# --- 7) EJECUTAR CHROOT ---
+# --- 7) EXECUTE CHROOT ---
 
-print_message "Ejecutando chroot para continuar la instalación..."
+print_message "Executing chroot to continue installation..."
 arch-chroot /mnt /root/post-chroot.sh
 
-# --- 8) FINALIZAR ---
+# --- 8) FINISH ---
 
-print_success "El script dentro de chroot ha finalizado."
-print_message "Puedes desmontar el sistema y reiniciar."
-print_message "Comandos sugeridos:"
+print_success "Chroot script completed."
+print_message "You can unmount the system and reboot."
+print_message "Suggested commands:"
 print_message "umount -R /mnt"
 print_message "reboot"
 echo
-print_warning "Recuerda retirar el medio de instalación durante el reinicio."
+print_warning "Remember to remove installation media during reboot."
