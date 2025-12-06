@@ -301,10 +301,8 @@ pacman -S --noconfirm \
     make \
     python \
     python-pip \
-    nodejs \
-    npm \
-    lua \
-    sqlite
+    lua
+    
 print_success "Development tools installed."
 
 # --- 20) INSTALL THEMES AND GTK/QT CONFIGURATION ---
