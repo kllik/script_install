@@ -265,7 +265,7 @@ print_success "Hyprland and components installed."
 # --- 17) INSTALL APPLICATIONS ---
 print_message "Installing applications..."
 pacman -S --noconfirm \
-    chromium \
+    firefox \
     zathura \
     zathura-pdf-mupdf \
     obs-studio \
