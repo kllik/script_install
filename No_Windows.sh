@@ -208,7 +208,7 @@ print_success "Essential packages installed."
 
 # --- 14) INSTALL NVIDIA DRIVERS ---
 print_message "Installing NVIDIA drivers..."
-pacman -S --noconfirm nvidia nvidia-utils nvidia-settings lib32-nvidia-utils vulkan-icd-loader lib32-vulkan-icd-loader egl-wayland
+pacman -S --noconfirm nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils vulkan-icd-loader lib32-vulkan-icd-loader egl-wayland libva-nvidia-driver
 print_success "NVIDIA drivers installed."
 
 # --- 15) CONFIGURE NVIDIA FOR WAYLAND ---
