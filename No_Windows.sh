@@ -1895,11 +1895,8 @@ print_success "Chroot script created successfully."
 
 # --- 7) EXECUTE CHROOT ---
 
-print_message "Executing chroot to continue installation..."
-if ! arch-chroot /mnt /root/post-chroot.sh; then
-    print_error "Chroot script failed. Check errors above."
-    exit 1
-fi
+arch-chroot /mnt /root/post-chroot.sh
+
 
 # --- 8) CLEANUP ---
 
