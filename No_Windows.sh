@@ -4,6 +4,9 @@
 # Configuration for: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
 # Usage: This script continues installation AFTER using cfdisk to create partitions
 # Configuration: Single boot - Arch Linux only
+# Updated: January 1, 2026
+
+set -e
 
 # --- Colors for messages ---
 GREEN="\033[0;32m"
@@ -35,6 +38,14 @@ if [ "$EUID" -ne 0 ]; then
     print_error "This script must be run as root"
     exit 1
 fi
+
+# --- VERIFY INTERNET CONNECTION ---
+print_message "Verifying internet connection..."
+if ! ping -c 1 archlinux.org &> /dev/null; then
+    print_error "No internet connection. Please connect to the internet first."
+    exit 1
+fi
+print_success "Internet connection verified."
 
 # --- AUTOMATIC DISK DETECTION ---
 print_message "Detecting available disks..."
@@ -68,7 +79,6 @@ if [[ "$DISK" == *"nvme"* ]] || [[ "$DISK" == *"mmcblk"* ]]; then
 else
     PART_PREFIX="${DISK}"
 fi
-
 
 # --- PARTITION DETECTION ---
 print_message "Detecting partitions on $DISK..."
@@ -130,10 +140,25 @@ mkdir -p /mnt/boot/efi
 mount "$EFI_DEV" /mnt/boot/efi
 print_success "File system mounted."
 
-# --- 4) INSTALL BASE SYSTEM ---
+# --- 4) UPDATE KEYRING AND INSTALL BASE SYSTEM ---
+
+print_message "Synchronizing package databases..."
+pacman -Sy
+print_success "Package databases synchronized."
+
+print_message "Updating pacman keyring (this fixes PGP signature errors)..."
+pacman -S --noconfirm archlinux-keyring
+pacman-key --init
+pacman-key --populate archlinux
+print_success "Keyring updated."
 
 print_message "Installing base system (this may take time)..."
-pacstrap /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs
+if ! pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs; then
+    print_error "pacstrap failed. Aborting installation."
+    print_message "Try running: pacman-key --refresh-keys"
+    umount -R /mnt 2>/dev/null || true
+    exit 1
+fi
 print_success "Base system installed."
 
 # --- 5) GENERATE FSTAB ---
@@ -142,6 +167,12 @@ print_message "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 print_success "fstab generated."
 
+# Verify /mnt/root exists before creating chroot script
+if [ ! -d "/mnt/root" ]; then
+    print_error "Directory /mnt/root does not exist. Base system installation may have failed."
+    exit 1
+fi
+
 # --- 6) PREPARE CHROOT ---
 
 print_message "Preparing files for chroot..."
@@ -149,9 +180,12 @@ print_message "Preparing files for chroot..."
 cat > /mnt/root/post-chroot.sh << 'EOL'
 #!/bin/bash
 
+set -e
+
 GREEN="\033[0;32m"
 BLUE="\033[0;34m"
 RED="\033[0;31m"
+YELLOW="\033[0;33m"
 NC="\033[0m"
 
 print_message() {
@@ -166,12 +200,22 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# --- 8) INSTALL NANO ---
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# --- 8) UPDATE KEYRING INSIDE CHROOT ---
+print_message "Initializing pacman keyring inside chroot..."
+pacman-key --init
+pacman-key --populate archlinux
+print_success "Keyring initialized."
+
+# --- 9) INSTALL NANO ---
 print_message "Installing nano..."
 pacman -Syu --noconfirm nano
 print_success "Nano installed."
 
-# --- 9) CONFIGURE LOCALE AND TIMEZONE ---
+# --- 10) CONFIGURE LOCALE AND TIMEZONE ---
 print_message "Configuring locale and timezone..."
 sed -i 's/#es_ES.UTF-8 UTF-8/es_ES.UTF-8 UTF-8/' /etc/locale.gen
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
@@ -181,7 +225,7 @@ ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 hwclock --systohc
 print_success "Locale and timezone configured."
 
-# --- 10) HOSTNAME AND HOSTS ---
+# --- 11) HOSTNAME AND HOSTS ---
 print_message "Configuring hostname..."
 echo "host" > /etc/hostname
 cat > /etc/hosts << EOF
@@ -191,27 +235,27 @@ cat > /etc/hosts << EOF
 EOF
 print_success "Hostname configured."
 
-# --- 11) ROOT PASSWORD ---
+# --- 12) ROOT PASSWORD ---
 print_message "Configure root password:"
 passwd
 
-# --- 12) ENABLE MULTILIB ---
+# --- 13) ENABLE MULTILIB ---
 print_message "Enabling multilib repository..."
 sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 pacman -Syy
 print_success "Multilib repository enabled."
 
-# --- 13) INSTALL ESSENTIAL PACKAGES ---
+# --- 14) INSTALL ESSENTIAL PACKAGES ---
 print_message "Installing essential system packages..."
 pacman -S --noconfirm networkmanager sudo grub efibootmgr ntfs-3g mtools dosfstools nano vim git linux-headers
 print_success "Essential packages installed."
 
-# --- 14) INSTALL NVIDIA DRIVERS ---
+# --- 15) INSTALL NVIDIA DRIVERS ---
 print_message "Installing NVIDIA drivers..."
 pacman -S --noconfirm nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils vulkan-icd-loader lib32-vulkan-icd-loader egl-wayland libva-nvidia-driver
 print_success "NVIDIA drivers installed."
 
-# --- 15) CONFIGURE NVIDIA FOR WAYLAND ---
+# --- 16) CONFIGURE NVIDIA FOR WAYLAND ---
 print_message "Configuring NVIDIA for Wayland..."
 mkdir -p /etc/modprobe.d
 cat > /etc/modprobe.d/nvidia.conf << EOF
@@ -222,7 +266,7 @@ EOF
 sed -i 's/^MODULES=.*/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)/' /etc/mkinitcpio.conf
 print_success "NVIDIA configuration prepared."
 
-# --- 16) INSTALL HYPRLAND AND DESKTOP COMPONENTS ---
+# --- 17) INSTALL HYPRLAND AND DESKTOP COMPONENTS ---
 print_message "Installing Hyprland and desktop components..."
 pacman -S --noconfirm \
     hyprland \
@@ -262,7 +306,7 @@ pacman -S --noconfirm \
     lm_sensors
 print_success "Hyprland and components installed."
 
-# --- 17) INSTALL APPLICATIONS ---
+# --- 18) INSTALL APPLICATIONS ---
 print_message "Installing applications..."
 pacman -S --noconfirm \
     chromium \
@@ -278,7 +322,7 @@ pacman -S --noconfirm \
     socat
 print_success "Applications installed."
 
-# --- 18) INSTALL FONTS ---
+# --- 19) INSTALL FONTS ---
 print_message "Installing fonts..."
 pacman -S --noconfirm \
     ttf-jetbrains-mono-nerd \
@@ -291,7 +335,7 @@ pacman -S --noconfirm \
     ttf-ubuntu-font-family
 print_success "Fonts installed."
 
-# --- 19) INSTALL DEVELOPMENT TOOLS ---
+# --- 20) INSTALL DEVELOPMENT TOOLS ---
 print_message "Installing development tools..."
 pacman -S --noconfirm \
     gcc \
@@ -302,10 +346,9 @@ pacman -S --noconfirm \
     python \
     python-pip \
     lua
-    
 print_success "Development tools installed."
 
-# --- 20) INSTALL THEMES AND GTK/QT CONFIGURATION ---
+# --- 21) INSTALL THEMES AND GTK/QT CONFIGURATION ---
 print_message "Installing themes..."
 pacman -S --noconfirm \
     adwaita-icon-theme \
@@ -316,36 +359,34 @@ pacman -S --noconfirm \
     xdg-utils
 print_success "Themes installed."
 
-# --- 21) INSTALL BLUETOOTH AND AUDIO ---
+# --- 22) INSTALL BLUETOOTH AND AUDIO ---
 print_message "Installing Bluetooth and audio support..."
 pacman -S --noconfirm bluez bluez-utils
 print_success "Bluetooth and audio installed."
 
-# --- 22) INSTALL ADDITIONAL TOOLS ---
+# --- 23) INSTALL ADDITIONAL TOOLS ---
 print_message "Installing additional tools..."
 pacman -S --noconfirm vulkan-tools ddcutil libnotify
 print_success "Additional tools installed."
 
-# --- 22b) INSTALL VIRTUALIZATION TOOLS ---
+# --- 24) INSTALL VIRTUALIZATION TOOLS ---
 print_message "Installing virtualization tools..."
 pacman -S --noconfirm virtualbox virtualbox-host-modules-arch
-modprobe vboxdrv
-usermod -aG vboxusers antonio
-print_success "VirtualBox installed. User 'antonio' added to vboxusers group."
+print_success "VirtualBox installed."
 
-# --- 23) REGENERATE INITRAMFS ---
+# --- 25) REGENERATE INITRAMFS ---
 print_message "Regenerating initramfs with complete configuration..."
 mkinitcpio -P
 print_success "Initramfs regenerated."
 
-# --- 24) CONFIGURE GRUB ---
+# --- 26) CONFIGURE GRUB ---
 print_message "Configuring GRUB..."
 sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1 amd_pstate=active"/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configured."
 
-# --- 25) CREATE NECESSARY GROUPS ---
+# --- 27) CREATE NECESSARY GROUPS ---
 print_message "Creating necessary groups..."
 groupadd -f wheel
 groupadd -f video
@@ -356,7 +397,7 @@ groupadd -f network
 groupadd -f power
 print_success "Groups created."
 
-# --- 26) CREATE USER ---
+# --- 28) CREATE USER ---
 print_message "Creating user 'antonio'..."
 useradd -m -G wheel,video,audio,storage,optical,network,power -s /bin/bash antonio
 print_message "Configure password for user 'antonio':"
@@ -365,16 +406,20 @@ passwd antonio
 print_message "Configuring sudo privileges for user 'antonio'..."
 echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
+
+# Add user to vboxusers group
+usermod -aG vboxusers antonio
+
 print_success "User created with sudo privileges."
 
-# --- 27) ENABLE SERVICES ---
+# --- 29) ENABLE SERVICES ---
 print_message "Enabling services..."
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable fstrim.timer
 print_success "Services enabled."
 
-# --- 28) CONFIGURE DARK THEME AND ENVIRONMENT VARIABLES ---
+# --- 30) CONFIGURE DARK THEME AND ENVIRONMENT VARIABLES ---
 print_message "Configuring dark theme for GTK and Qt..."
 mkdir -p /etc/gtk-3.0 /etc/gtk-4.0
 cat > /etc/gtk-3.0/settings.ini << EOF
@@ -404,7 +449,7 @@ GTK_THEME=Adwaita-dark
 EOF
 print_success "Dark theme configured."
 
-# --- 29) CONFIGURE DESKTOP ENVIRONMENT ---
+# --- 31) CONFIGURE DESKTOP ENVIRONMENT ---
 print_message "Configuring Hyprland, Quickshell and Alacritty..."
 
 mkdir -p /home/antonio/.config/{hypr/scripts,quickshell/widgets,quickshell/scripts,alacritty,qt5ct,gtk-3.0,gtk-4.0,wofi}
@@ -1839,19 +1884,35 @@ print_message "Base installation completed."
 print_warning "Type 'exit', unmount partitions with 'umount -R /mnt' and reboot."
 EOL
 
+# Verify post-chroot.sh was created successfully
+if [ ! -f "/mnt/root/post-chroot.sh" ]; then
+    print_error "Failed to create post-chroot.sh"
+    exit 1
+fi
+
 chmod +x /mnt/root/post-chroot.sh
+print_success "Chroot script created successfully."
 
 # --- 7) EXECUTE CHROOT ---
 
 print_message "Executing chroot to continue installation..."
-arch-chroot /mnt /root/post-chroot.sh
+if ! arch-chroot /mnt /root/post-chroot.sh; then
+    print_error "Chroot script failed. Check errors above."
+    exit 1
+fi
 
-# --- 8) FINISH ---
+# --- 8) CLEANUP ---
+
+print_message "Cleaning up installation files..."
+rm -f /mnt/root/post-chroot.sh
+print_success "Cleanup completed."
+
+# --- 9) FINISH ---
 
 print_success "Chroot script completed."
 print_message "You can unmount the system and reboot."
 print_message "Suggested commands:"
-print_message "umount -R /mnt"
-print_message "reboot"
+print_message "  umount -R /mnt"
+print_message "  reboot"
 echo
 print_warning "Remember to remove installation media during reboot."
