@@ -6,8 +6,6 @@
 # Configuration: Single boot - Arch Linux only
 # Updated: January 1, 2026
 
-set -e
-
 # --- Colors for messages ---
 GREEN="\033[0;32m"
 BLUE="\033[0;34m"
@@ -38,14 +36,6 @@ if [ "$EUID" -ne 0 ]; then
     print_error "This script must be run as root"
     exit 1
 fi
-
-# --- VERIFY INTERNET CONNECTION ---
-print_message "Verifying internet connection..."
-if ! ping -c 1 archlinux.org &> /dev/null; then
-    print_error "No internet connection. Please connect to the internet first."
-    exit 1
-fi
-print_success "Internet connection verified."
 
 # --- AUTOMATIC DISK DETECTION ---
 print_message "Detecting available disks..."
@@ -153,12 +143,7 @@ pacman-key --populate archlinux
 print_success "Keyring updated."
 
 print_message "Installing base system (this may take time)..."
-if ! pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs; then
-    print_error "pacstrap failed. Aborting installation."
-    print_message "Try running: pacman-key --refresh-keys"
-    umount -R /mnt 2>/dev/null || true
-    exit 1
-fi
+pacstrap -K /mnt base base-devel linux linux-headers linux-firmware amd-ucode btrfs-progs
 print_success "Base system installed."
 
 # --- 5) GENERATE FSTAB ---
@@ -167,20 +152,12 @@ print_message "Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 print_success "fstab generated."
 
-# Verify /mnt/root exists before creating chroot script
-if [ ! -d "/mnt/root" ]; then
-    print_error "Directory /mnt/root does not exist. Base system installation may have failed."
-    exit 1
-fi
-
 # --- 6) PREPARE CHROOT ---
 
 print_message "Preparing files for chroot..."
 
 cat > /mnt/root/post-chroot.sh << 'EOL'
 #!/bin/bash
-
-set -e
 
 GREEN="\033[0;32m"
 BLUE="\033[0;34m"
@@ -203,6 +180,13 @@ print_error() {
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
+
+# --- 7) CREATE VCONSOLE.CONF TO PREVENT MKINITCPIO ERROR ---
+print_message "Creating vconsole.conf..."
+cat > /etc/vconsole.conf << EOF
+KEYMAP=us
+EOF
+print_success "vconsole.conf created."
 
 # --- 8) UPDATE KEYRING INSIDE CHROOT ---
 print_message "Initializing pacman keyring inside chroot..."
@@ -1884,19 +1868,13 @@ print_message "Base installation completed."
 print_warning "Type 'exit', unmount partitions with 'umount -R /mnt' and reboot."
 EOL
 
-# Verify post-chroot.sh was created successfully
-if [ ! -f "/mnt/root/post-chroot.sh" ]; then
-    print_error "Failed to create post-chroot.sh"
-    exit 1
-fi
-
 chmod +x /mnt/root/post-chroot.sh
-print_success "Chroot script created successfully."
+print_success "Chroot script created."
 
 # --- 7) EXECUTE CHROOT ---
 
+print_message "Executing chroot to continue installation..."
 arch-chroot /mnt /root/post-chroot.sh
-
 
 # --- 8) CLEANUP ---
 
