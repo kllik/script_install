@@ -399,12 +399,12 @@ EOF
 
 # Hyprland configuration
 cat > /home/antonio/.config/hypr/hyprland.conf << 'EOF'
-# Hyprland configuration file - Complete and production-ready configuration
-# This file manages the complete Hyprland window manager configuration
+# Hyprland configuration file
+# Complete configuration for Nvidia RTX 3080 + AMD Ryzen 9 5900HX
 
 # --- MONITORS ---
+monitor=HDMI-A-1,2560x1440@144,-2048x0,1.25
 monitor=eDP-1,2560x1600@165,0x0,1.6
-monitor=HDMI-A-1,1920x1080@144,1600x0,1
 
 # --- PROGRAMS ---
 $terminal = alacritty
@@ -412,9 +412,10 @@ $fileManager = thunar
 $menu = wofi --show drun
 
 # --- AUTOSTART ---
-exec-once = waybar
-exec-once = hyprpaper
+exec-once = swww-daemon
+exec-once = quickshell
 exec-once = blueman-applet
+exec-once = gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 12'
 exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
 exec-once = nm-applet
 exec-once = swaync
@@ -452,14 +453,14 @@ decoration {
     rounding = 10
     active_opacity = 1.0
     inactive_opacity = 1.0
-    
+
     blur {
         enabled = true
         size = 3
         passes = 1
         vibrancy = 0.1696
     }
-    
+
     shadow {
         enabled = true
         range = 4
@@ -504,21 +505,15 @@ input {
     kb_options = grp:alt_shift_toggle
     follow_mouse = 1
     sensitivity = 0
-    
+
     touchpad {
         natural_scroll = false
     }
 }
 
-device {
-    name = epic-mouse-v1
-    sensitivity = -0.5
-}
-
 # --- KEYBINDINGS ---
 $mainMod = SUPER
 
-# Application launchers
 bind = $mainMod, Q, exec, $terminal
 bind = $mainMod, C, killactive,
 bind = $mainMod, M, exit,
@@ -526,16 +521,24 @@ bind = $mainMod, E, exec, $fileManager
 bind = $mainMod, V, togglefloating,
 bind = $mainMod, R, exec, $menu
 bind = $mainMod, P, pseudo,
-bind = $mainMod, J, togglesplit,
+bind = $mainMod, T, togglesplit,
 bind = $mainMod, F, fullscreen,
 
-# Focus movement
-bind = $mainMod, left, movefocus, l
-bind = $mainMod, right, movefocus, r
-bind = $mainMod, up, movefocus, u
-bind = $mainMod, down, movefocus, d
+bind = $mainMod, h, movefocus, l
+bind = $mainMod, l, movefocus, r
+bind = $mainMod, k, movefocus, u
+bind = $mainMod, j, movefocus, d
 
-# Workspace switching
+bind = $mainMod SHIFT, h, movewindow, l
+bind = $mainMod SHIFT, l, movewindow, r
+bind = $mainMod SHIFT, k, movewindow, u
+bind = $mainMod SHIFT, j, movewindow, d
+
+bind = $mainMod CTRL, h, resizeactive, -40 0
+bind = $mainMod CTRL, l, resizeactive, 40 0
+bind = $mainMod CTRL, k, resizeactive, 0 -40
+bind = $mainMod CTRL, j, resizeactive, 0 40
+
 bind = $mainMod, 1, workspace, 1
 bind = $mainMod, 2, workspace, 2
 bind = $mainMod, 3, workspace, 3
@@ -547,7 +550,6 @@ bind = $mainMod, 8, workspace, 8
 bind = $mainMod, 9, workspace, 9
 bind = $mainMod, 0, workspace, 10
 
-# Move window to workspace
 bind = $mainMod SHIFT, 1, movetoworkspace, 1
 bind = $mainMod SHIFT, 2, movetoworkspace, 2
 bind = $mainMod SHIFT, 3, movetoworkspace, 3
@@ -559,45 +561,29 @@ bind = $mainMod SHIFT, 8, movetoworkspace, 8
 bind = $mainMod SHIFT, 9, movetoworkspace, 9
 bind = $mainMod SHIFT, 0, movetoworkspace, 10
 
-# Special workspace
 bind = $mainMod, S, togglespecialworkspace, magic
 bind = $mainMod SHIFT, S, movetoworkspace, special:magic
 
-# Mouse workspace switching
 bind = $mainMod, mouse_down, workspace, e+1
 bind = $mainMod, mouse_up, workspace, e-1
 
-# Mouse window manipulation
 bindm = $mainMod, mouse:272, movewindow
 bindm = $mainMod, mouse:273, resizewindow
 
-# Volume controls
 binde = , XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+
 binde = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
 bind = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
 bind = , XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
 
-# Brightness controls
 binde = , XF86MonBrightnessUp, exec, brightnessctl s 10%+
 binde = , XF86MonBrightnessDown, exec, brightnessctl s 10%-
 
-# Media controls
 bindl = , XF86AudioNext, exec, playerctl next
 bindl = , XF86AudioPrev, exec, playerctl previous
 bindl = , XF86AudioPlay, exec, playerctl play-pause
 
-# Screenshots
 bind = , Print, exec, grim -g "$(slurp)" - | wl-copy
 bind = SUPER, Z, exec, grim -g "$(slurp)" ~/Imágenes/Capturas/captura-$(date +'%Y-%m-%d-%H%M%S').png
-bind = SUPER_CTRL, T, exec, ~/.config/hypr/scripts/wallpaper-changer.sh
-
-# --- WINDOW RULES ---
-windowrulev2 = float,class:^(pavucontrol)$
-windowrulev2 = float,class:^(blueman-manager)$
-windowrulev2 = float,class:^(nm-connection-editor)$
-windowrulev2 = float,title:^(Steam - News)$
-windowrulev2 = suppressevent maximize, class:.*
-windowrulev2 = opacity 1.0 override,class:^(code-oss|Code)$
 EOF
 
 # Waybar configuration
