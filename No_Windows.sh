@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # === ARCH LINUX INSTALLATION SCRIPT WITH BTRFS, HYPRLAND AND QUICKSHELL ===
-# Configuration for: Nvidia RTX 3080 + AMD Ryzen 9 5900HX
+# Configuration for: AMD Radeon Vega 8 (integrated) + AMD Ryzen 5 3500U
 # Usage: This script continues installation AFTER using cfdisk to create partitions
 # Configuration: Single boot - Arch Linux only
-# Updated: January 1, 2026
+# Updated: February 12, 2026
 
 # --- Colors for messages ---
 GREEN="\033[0;32m"
@@ -234,21 +234,15 @@ print_message "Installing essential system packages..."
 pacman -S --noconfirm networkmanager sudo grub efibootmgr ntfs-3g mtools dosfstools nano vim git linux-headers
 print_success "Essential packages installed."
 
-# --- 15) INSTALL NVIDIA DRIVERS ---
-print_message "Installing NVIDIA drivers..."
-pacman -S --noconfirm nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils vulkan-icd-loader lib32-vulkan-icd-loader egl-wayland libva-nvidia-driver
-print_success "NVIDIA drivers installed."
+# --- 15) INSTALL AMD GPU DRIVERS ---
+print_message "Installing AMD GPU drivers..."
+pacman -S --noconfirm mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon vulkan-icd-loader lib32-vulkan-icd-loader libva-mesa-driver mesa-vdpau xf86-video-amdgpu
+print_success "AMD GPU drivers installed."
 
-# --- 16) CONFIGURE NVIDIA FOR WAYLAND ---
-print_message "Configuring NVIDIA for Wayland..."
-mkdir -p /etc/modprobe.d
-cat > /etc/modprobe.d/nvidia.conf << EOF
-options nvidia-drm modeset=1
-options nvidia NVreg_PreserveVideoMemoryAllocations=1
-EOF
-
-sed -i 's/^MODULES=.*/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)/' /etc/mkinitcpio.conf
-print_success "NVIDIA configuration prepared."
+# --- 16) CONFIGURE AMDGPU FOR WAYLAND ---
+print_message "Configuring AMDGPU for Wayland..."
+sed -i 's/^MODULES=.*/MODULES=(amdgpu)/' /etc/mkinitcpio.conf
+print_success "AMDGPU configuration prepared."
 
 # --- 17) INSTALL HYPRLAND AND DESKTOP COMPONENTS ---
 print_message "Installing Hyprland and desktop components..."
@@ -365,7 +359,7 @@ print_success "Initramfs regenerated."
 
 # --- 26) CONFIGURE GRUB ---
 print_message "Configuring GRUB..."
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1 amd_pstate=active"/' /etc/default/grub
+sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet amd_pstate=active"/' /etc/default/grub
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 print_success "GRUB configured."
@@ -443,11 +437,10 @@ mkdir -p /home/antonio/Wallpapers
 # --- HYPRLAND CONFIGURATION ---
 cat > /home/antonio/.config/hypr/hyprland.conf << 'EOHYPR'
 # Hyprland configuration file
-# Complete configuration for Nvidia RTX 3080 + AMD Ryzen 9 5900HX
+# Complete configuration for AMD Radeon Vega 8 + AMD Ryzen 5 3500U
 
 # --- MONITORS ---
-monitor=HDMI-A-1,2560x1440@144,-2048x0,1.25
-monitor=eDP-1,2560x1600@165,0x0,1.6
+monitor=eDP-1,1920x1080@60,0x0,1
 
 # --- PROGRAMS ---
 $terminal = alacritty
@@ -472,13 +465,6 @@ env = QT_QPA_PLATFORM,wayland
 env = QT_WAYLAND_DISABLE_WINDOWDECORATION,1
 env = GDK_BACKEND,wayland
 env = GTK_THEME,Adwaita-dark
-env = LIBVA_DRIVER_NAME,nvidia
-env = __GLX_VENDOR_LIBRARY_NAME,nvidia
-env = GBM_BACKEND,nvidia-drm
-env = __GL_GSYNC_ALLOWED,1
-env = __GL_VRR_ALLOWED,1
-env = WLR_NO_HARDWARE_CURSORS,1
-env = WLR_DRM_NO_ATOMIC,1
 
 # --- LOOK AND FEEL ---
 general {
@@ -535,7 +521,7 @@ misc {
     force_default_wallpaper = 0
     disable_hyprland_logo = true
     vfr = true
-    vrr = 1
+    vrr = 0
 }
 
 xwayland {
@@ -1103,7 +1089,7 @@ EOWIDGET
 # GpuIndicator widget
 cat > /home/antonio/.config/quickshell/widgets/GpuIndicator.qml << 'EOWIDGET'
 // widgets/GpuIndicator.qml
-// Displays GPU usage percentage in real time (NVIDIA)
+// Displays GPU usage percentage in real time (AMD)
 
 import QtQuick
 import Quickshell.Io
@@ -1137,7 +1123,7 @@ Item {
 
     Process {
         id: gpuCheck
-        command: ["sh", "-c", "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null || echo 0"]
+        command: ["sh", "-c", "cat /sys/class/drm/card0/device/gpu_busy_percent 2>/dev/null || echo 0"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
